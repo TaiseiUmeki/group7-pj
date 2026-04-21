@@ -1,0 +1,49 @@
+# ---------- Build Stage ----------
+FROM golang:1.22-alpine AS builder
+
+WORKDIR /app
+
+# 必要なパッケージ
+RUN apk add --no-cache git
+
+# ① go.modのみコピー（go.sum不要）
+COPY go.mod ./
+
+# ② 依存関係解決（ここでgo.sum生成）
+RUN go mod tidy
+
+# ③ ソースコードコピー
+COPY . .
+
+# ④ 念のため再度整合性（依存追加に対応）
+RUN go mod tidy
+
+# ⑤ ビルド
+RUN go build -o main .
+
+# ---------- Runtime Stage ----------
+FROM alpine:3.19
+
+WORKDIR /app
+
+# タイムゾーン・証明書
+RUN apk add --no-cache \
+  ca-certificates \
+  tzdata \
+  && update-ca-certificates
+
+# ビルドしたバイナリをコピー
+COPY --from=builder /app/main .
+
+# ログディレクトリ
+RUN mkdir -p /app/logs
+
+# 非rootユーザー作成
+RUN adduser -D appuser
+RUN chown -R appuser:appuser /app
+
+USER appuser
+
+EXPOSE 8080
+
+CMD ["./main"]
