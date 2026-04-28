@@ -22,4 +22,9 @@ func (s *Service) GetUser(id int) (*model.User, error) {
 	return s.repo.GetUserByID(id)
 }
 
+// GetAllUsers はすべてのユーザー情報を取得します
+func (s *Service) GetAllUsers() ([]*model.User, error) {
+	return s.repo.GetAllUsers()
+}
+
 // ここにビジネスロジックを追加します

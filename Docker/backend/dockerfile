@@ -1,25 +1,26 @@
 # ---------- Build Stage ----------
-FROM golang:1.22-alpine AS builder
+FROM golang:1.26.2-alpine AS builder
 
 WORKDIR /app
 
 # 必要なパッケージ
 RUN apk add --no-cache git
 
-# ① go.modのみコピー（go.sum不要）
-COPY go.mod ./
+# ① go.mod と go.sum を先にコピー
+# - これにより依存を先に解決でき、キャッシュ効率が良くなる
+COPY go.mod go.sum ./
 
-# ② 依存関係解決（ここでgo.sum生成）
-RUN go mod tidy
+# ② 依存関係をダウンロード
+RUN go mod download
 
 # ③ ソースコードコピー
 COPY . .
 
-# ④ 念のため再度整合性（依存追加に対応）
-RUN go mod tidy
+# ④ （ソースをコピー後の追加操作は不要）
 
 # ⑤ ビルド
-RUN go build -o main .
+# 実際のエントリポイントは cmd/server/main.go
+RUN go build -o main ./cmd/server
 
 # ---------- Runtime Stage ----------
 FROM alpine:3.19
