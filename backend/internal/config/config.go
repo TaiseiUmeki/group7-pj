@@ -10,6 +10,7 @@ type Config struct {
 	Env      string
 	DBDriver string
 	DBURL    string
+	JWTSecret string
 }
 
 // Load は環境変数から設定を読み込みます
@@ -19,6 +20,7 @@ func Load() (*Config, error) {
 		Env:      os.Getenv("ENV"),
 		DBDriver: os.Getenv("DB_DRIVER"),
 		DBURL:    os.Getenv("DB_URL"),
+		JWTSecret: os.Getenv("JWT_SECRET"),
 	}
 
 	// デフォルト値を設定
@@ -27,6 +29,9 @@ func Load() (*Config, error) {
 	}
 	if cfg.Env == "" {
 		cfg.Env = "development"
+	}
+	if cfg.JWTSecret == "" {
+		cfg.JWTSecret = "dev-jwt-secret"
 	}
 
 	return cfg, nil
