@@ -6,6 +6,8 @@ import (
 	"os"
 )
 
+// 将来的に消す（現在は未使用のためimportを削除）
+
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
