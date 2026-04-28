@@ -2,15 +2,19 @@ package repository
 
 import (
 	"backend/internal/model"
-	"fmt"
+	"errors"
 
 	"gorm.io/gorm"
 )
+
+// ErrUserNotFound はユーザーが見つからない場合のエラーです
+var ErrUserNotFound = errors.New("user not found")
 
 // Repository はデータベースアクセス層のインターフェースです
 type Repository interface {
 	// User関連
 	GetUserByID(id int) (*model.User, error)
+	GetUserByEmail(email string) (*model.User, error)
 	GetAllUsers() ([]*model.User, error)
 	CreateUser(user *model.User) error
 	UpdateUser(user *model.User) error
@@ -33,8 +37,20 @@ func NewMySQLRepository(db *gorm.DB) *MySQLRepository {
 func (r *MySQLRepository) GetUserByID(id int) (*model.User, error) {
 	var user model.User
 	if err := r.db.Where("id = ?", id).First(&user).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("user not found")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
+// GetUserByEmail はメールアドレスからユーザー情報を取得します
+func (r *MySQLRepository) GetUserByEmail(email string) (*model.User, error) {
+	var user model.User
+	if err := r.db.Where("email = ?", email).First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrUserNotFound
 		}
 		return nil, err
 	}

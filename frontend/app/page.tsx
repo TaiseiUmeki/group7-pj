@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 type ApiUser = {
@@ -215,6 +216,10 @@ function HomeScreen({
             <span>🗺️</span>
             ジムマップ
           </button>
+          <Link href="/login" className="feature-card blue" style={{ gridColumn: "1 / -1" }}>
+            <span>🔐</span>
+            ログイン
+          </Link>
         </div>
 
         <div className="section-heading">
