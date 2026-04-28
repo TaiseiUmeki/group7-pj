@@ -10,7 +10,7 @@ import (
 
 // TestHealthCheck はヘルスチェックエンドポイントをテストします
 func TestHealthCheck(t *testing.T) {
-	router := api.NewRouter()
+	router := api.NewRouter(nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	w := httptest.NewRecorder()

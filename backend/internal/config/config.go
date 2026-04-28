@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 )
 
@@ -28,6 +29,30 @@ func Load() (*Config, error) {
 	if cfg.Env == "" {
 		cfg.Env = "development"
 	}
+	if cfg.DBDriver == "" {
+		cfg.DBDriver = "mysql"
+	}
+	if cfg.DBURL == "" && cfg.DBDriver == "mysql" {
+		cfg.DBURL = defaultMySQLURL()
+	}
 
 	return cfg, nil
+}
+
+func defaultMySQLURL() string {
+	user := getEnv("DB_USER", "app_user")
+	password := getEnv("DB_PASSWORD", "app_pass")
+	host := getEnv("DB_HOST", "db")
+	port := getEnv("DB_PORT", "3306")
+	database := getEnv("DB_DATABASE", "app_db")
+
+	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local", user, password, host, port, database)
+}
+
+func getEnv(key, fallback string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	return value
 }
