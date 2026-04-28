@@ -5,22 +5,26 @@ import (
 
 	"backend/internal/api/handler"
 	"backend/internal/api/middleware"
+	"backend/internal/repository"
 	"backend/internal/service"
+
+	"gorm.io/gorm"
 )
 
 // NewRouter はHTTPルーターを初期化します
-func NewRouter() http.Handler {
-	// 仮のサービスとハンドラーを作成（実装に合わせて修正してください）
-	svc := service.NewService(nil)
+func NewRouter(db *gorm.DB) http.Handler {
+	// リポジトリ、サービス、ハンドラーを作成
+	repo := repository.NewMySQLRepository(db)
+	svc := service.NewService(repo)
 	h := handler.NewHandler(svc)
 
 	mux := http.NewServeMux()
 
 	// ルート定義
 	mux.HandleFunc("/health", h.HealthCheck)
-
-	// ここにその他のルートを追加します
+	mux.HandleFunc("/api/users", h.GetAllUsers)
+	mux.HandleFunc("/api/users/get", h.GetUser)
 
 	// ミドルウェアを適用
-	return middleware.LoggingMiddleware(mux)
+	return middleware.CORSMiddleware(middleware.LoggingMiddleware(mux))
 }

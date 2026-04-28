@@ -12,6 +12,7 @@ services:
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
       NEXT_WEBPACK_USEPOLLING: "1"
+      NEXT_PUBLIC_API_URL: http://localhost:8080
     networks:
       - app-network
     ports:
