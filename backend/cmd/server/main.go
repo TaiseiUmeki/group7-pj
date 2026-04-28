@@ -8,6 +8,7 @@ import (
 	"backend/internal/api"
 	"backend/internal/config"
 	"backend/internal/model"
+	"backend/internal/seed"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -31,6 +32,13 @@ func main() {
 		log.Fatalf("Failed to run migration: %v", err)
 	}
 	fmt.Println("Database migration completed")
+
+	if cfg.Env != "production" {
+		if err := seed.Run(db); err != nil {
+			log.Fatalf("Failed to seed database: %v", err)
+		}
+		fmt.Println("Database seed completed")
+	}
 
 	// ハンドラーとミドルウェアを設定
 	router := api.NewRouter(db)
