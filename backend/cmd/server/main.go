@@ -5,9 +5,9 @@ import (
 	"log"
 	"net/http"
 
-	"backend/internal/api"
 	"backend/internal/config"
-	"backend/internal/model"
+	"backend/internal/infrastructure/db/models"
+	presentationhttp "backend/internal/presentation/http"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -27,13 +27,13 @@ func main() {
 	}
 
 	// マイグレーション実行
-	if err := db.AutoMigrate(&model.User{}); err != nil {
+	if err := db.AutoMigrate(&models.UserModel{}); err != nil {
 		log.Fatalf("Failed to run migration: %v", err)
 	}
 	fmt.Println("Database migration completed")
 
 	// ハンドラーとミドルウェアを設定
-	router := api.NewRouter(db)
+	router := presentationhttp.NewRouter(db)
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	fmt.Printf("backend started on %s\n", addr)

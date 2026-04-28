@@ -5,12 +5,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"backend/internal/api"
+	presentationhttp "backend/internal/presentation/http"
 )
 
 // TestHealthCheck はヘルスチェックエンドポイントをテストします
 func TestHealthCheck(t *testing.T) {
-	router := api.NewRouter()
+	router := presentationhttp.NewRouter()
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	w := httptest.NewRecorder()

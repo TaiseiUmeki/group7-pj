@@ -8,11 +8,12 @@ GoによるバックエンドAPI
 backend/
 ├── cmd/server/              # エントリーポイント
 ├── internal/                # プライベートコード
-│   ├── api/                 # APIレイヤー（ハンドラー、ミドルウェア、ルーティング）
 │   ├── config/              # 設定管理
-│   ├── service/             # ビジネスロジック
-│   ├── repository/          # データベースアクセス層
-│   └── model/               # データモデル定義
+│   ├── presentation/        # HTTPハンドラー、ミドルウェア、ルーティング
+│   ├── application/         # ユースケース
+│   ├── domain/              # エンティティ、リポジトリIF
+│   ├── infrastructure/      # DBモデル、リポジトリ実装
+│   └── di/                  # 依存性注入
 ├── pkg/                     # 外部から使用可能な共有ライブラリ
 ├── migrations/              # DBマイグレーションスクリプト
 ├── tests/                   # テスト
@@ -61,18 +62,20 @@ go test ./tests/...
 
 ### 新しいハンドラーを追加する
 
-1. `internal/api/handler/handler.go`にハンドラーメソッドを追加
-2. `internal/api/router.go`でルーティングを設定
+1. `internal/presentation/http/handler/handler.go`にハンドラーメソッドを追加
+2. `internal/presentation/http/router.go`でルーティングを設定
 
 ### 新しいビジネスロジックを追加する
 
-1. `internal/service/service.go`にメソッドを追加
-2. 必要に応じて`internal/repository/`のメソッドを追加
+1. `internal/domain/`にエンティティとリポジトリIFを追加
+2. `internal/application/`にユースケースを追加
+3. `internal/infrastructure/`にDBモデルとリポジトリ実装を追加
+4. `internal/di/`で依存を組み立てる
 
 ## 構成図
 
 ```
-Request → Middleware → Router → Handler → Service → Repository → DB
-         ↓                                  ↓
-       Logging                      Business Logic
+Request → Presentation → Application → Domain ← Infrastructure
+                                     ↑
+                                    DI
 ```
