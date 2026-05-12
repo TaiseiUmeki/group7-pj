@@ -36,10 +36,10 @@ func Load() (*Config, error) {
 	}
 	if cfg.DBURL == "" && cfg.DBDriver == "mysql" {
 		cfg.DBURL = defaultMySQLURL()
+	}
 	if cfg.JWTSecret == "" {
 		cfg.JWTSecret = "dev-jwt-secret"
 	}
-
 	return cfg, nil
 }
 
