@@ -152,6 +152,10 @@ func (f *fakeRepo) DeleteWorkoutRecord(id int) error {
 	return nil
 }
 
+func (f *fakeRepo) CreateTrainingPost(post *model.TrainingPost) error {
+	return nil
+}
+
 func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 	t.Helper()
 
@@ -181,6 +185,7 @@ func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 	r.PUT("/api/workout-records/:id", h.UpdateWorkoutRecord)
 	r.GET("/api/workout-records", h.ListWorkoutRecords)
 	r.GET("/api/workout-records/:id", h.GetWorkoutRecord)
+	r.POST("/api/posts", h.CreateTrainingPost)
 
 	return r, seedUser, "test-secret"
 }

@@ -11,6 +11,7 @@ type Tone = "blue" | "green" | "purple";
 type BodyPart = "胸" | "背中" | "脚" | "肩" | "腕" | "体幹";
 
 type TrainingLog = {
+  id: string;
   date: string;
   exercise: string;
   detail: string;
@@ -102,6 +103,15 @@ type DetailedWorkoutInput = {
   note: string;
 };
 
+const exerciseTypeIDs: Record<BodyPart, number> = {
+  胸: 1,
+  背中: 2,
+  脚: 3,
+  肩: 4,
+  腕: 5,
+  体幹: 6,
+};
+
 const exercisesByBodyPart: Record<BodyPart, string[]> = {
   胸: ["ベンチプレス", "インクラインプレス", "ダンベルフライ", "プッシュアップ"],
   背中: ["デッドリフト", "ラットプルダウン", "ベントオーバーロウ", "懸垂"],
@@ -120,9 +130,9 @@ const myProfile: Profile = {
   streak: "18日",
   achievements: "24",
   logs: [
-    { date: "5月21日", exercise: "ベンチプレス", detail: "4セット x 8回 / 82.5kg" },
-    { date: "5月20日", exercise: "スクワット", detail: "5セット x 5回 / 110kg" },
-    { date: "5月18日", exercise: "デッドリフト", detail: "3セット x 5回 / 130kg" },
+    { id: "my-log-2026-05-21-bench-press", date: "5月21日", exercise: "ベンチプレス", detail: "4セット x 8回 / 82.5kg" },
+    { id: "my-log-2026-05-20-squat", date: "5月20日", exercise: "スクワット", detail: "5セット x 5回 / 110kg" },
+    { id: "my-log-2026-05-18-deadlift", date: "5月18日", exercise: "デッドリフト", detail: "3セット x 5回 / 130kg" },
   ],
   badges: [
     { title: "継続の達人", description: "14日連続で記録", earnedAt: "5月20日獲得", tone: "gold" },
@@ -157,8 +167,8 @@ const recommendedPosts: TimelinePost[] = [
       streak: "12日",
       achievements: "15",
       logs: [
-        { date: "5月26日", exercise: "ベンチプレス", detail: "1セット x 1回 / 100kg" },
-        { date: "5月24日", exercise: "インクラインプレス", detail: "4セット x 10回 / 32kg" },
+        { id: "recommended-1-log-2026-05-26-bench-press", date: "5月26日", exercise: "ベンチプレス", detail: "1セット x 1回 / 100kg" },
+        { id: "recommended-1-log-2026-05-24-incline-press", date: "5月24日", exercise: "インクラインプレス", detail: "4セット x 10回 / 32kg" },
       ],
     },
     didTrain: true,
@@ -181,8 +191,8 @@ const recommendedPosts: TimelinePost[] = [
       streak: "31日",
       achievements: "12",
       logs: [
-        { date: "5月26日", exercise: "ランニング", detail: "5.0km / 27分12秒" },
-        { date: "5月25日", exercise: "ブルガリアンスクワット", detail: "3セット x 12回 / 20kg" },
+        { id: "recommended-2-log-2026-05-26-running", date: "5月26日", exercise: "ランニング", detail: "5.0km / 27分12秒" },
+        { id: "recommended-2-log-2026-05-25-bulgarian-squat", date: "5月25日", exercise: "ブルガリアンスクワット", detail: "3セット x 12回 / 20kg" },
       ],
     },
     didTrain: true,
@@ -208,8 +218,8 @@ const followingPosts: TimelinePost[] = [
       streak: "9日",
       achievements: "37",
       logs: [
-        { date: "5月26日", exercise: "デッドリフト", detail: "3セット x 3回 / 160kg" },
-        { date: "5月22日", exercise: "スクワット", detail: "5セット x 5回 / 120kg" },
+        { id: "following-3-log-2026-05-26-deadlift", date: "5月26日", exercise: "デッドリフト", detail: "3セット x 3回 / 160kg" },
+        { id: "following-3-log-2026-05-22-squat", date: "5月22日", exercise: "スクワット", detail: "5セット x 5回 / 120kg" },
       ],
     },
     didTrain: true,
@@ -427,17 +437,23 @@ export default function Home() {
 
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-      const response = await fetch(`${apiUrl}/api/workout-records`, {
+      const startTime = new Date(input.startTime);
+      const endTime = new Date(startTime.getTime() + input.durationMinutes * 60000);
+      const response = await fetch(`${apiUrl}/api/posts`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          record_type: "normal",
-          exercise_type: `${input.bodyPart} / ${input.exercise}`,
-          start_time: new Date(input.startTime).toISOString(),
-          duration_minutes: input.durationMinutes,
+          didTrain: true,
+          trainedOn: startTime.toISOString().slice(0, 10),
+          startedAt: startTime.toISOString(),
+          endedAt: endTime.toISOString(),
+          exerciseType: exerciseTypeIDs[input.bodyPart],
+          durationMinutes: input.durationMinutes,
+          note: input.note.trim() || `${input.bodyPart} / ${input.exercise}`,
+          visibility: "followers_and_recommended",
         }),
       });
 
@@ -833,7 +849,7 @@ function ProfileScreen({
         <div className={styles.logs}>
           {profile.logs.length > 0 ? (
             profile.logs.map((log) => (
-              <article className={styles.log} key={`${log.date}-${log.exercise}`}>
+              <article className={styles.log} key={log.id}>
                 <time>{log.date}</time>
                 <strong>{log.exercise}</strong>
                 <p>{log.detail}</p>
@@ -1230,6 +1246,7 @@ function formatWorkoutLog(record: WorkoutRecord): TrainingLog {
     : `${record.exercise_type || "詳細未設定"} / ${record.duration_minutes}分`;
 
   return {
+    id: `workout-${record.id}`,
     date,
     exercise,
     detail,
