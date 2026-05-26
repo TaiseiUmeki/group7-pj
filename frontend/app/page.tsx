@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import styles from "./page.module.css";
 
 type TimelineTab = "recommended" | "following";
-type View = "timeline" | "quickStart" | "profile" | "member";
+type View = "timeline" | "postDetail" | "quickStart" | "profile" | "member";
 type Tone = "blue" | "green" | "purple";
 
 type TrainingLog = {
@@ -27,7 +27,12 @@ type Profile = {
 type TimelinePost = {
   id: number | string;
   author: Profile;
-  message: string;
+  didTrain: boolean;
+  exercise: string;
+  duration: string;
+  summary: string;
+  detail: string;
+  trainedAt: string;
   postedAt: string;
   likes: number;
 };
@@ -73,7 +78,12 @@ const recommendedPosts: TimelinePost[] = [
         { date: "5月24日", exercise: "インクラインプレス", detail: "4セット x 10回 / 32kg" },
       ],
     },
-    message: "今日のベンチプレス100kg達成！",
+    didTrain: true,
+    exercise: "ベンチプレス",
+    duration: "45分",
+    summary: "100kgを達成。フォームを維持して最後まで押し切れました。",
+    detail: "ウォームアップ後、80kg x 5回、90kg x 3回、100kg x 1回。次回は100kgを安定して挙げられるよう補助種目も継続します。",
+    trainedAt: "今日 07:10 - 07:55",
     postedAt: "2時間前",
     likes: 34,
   },
@@ -92,7 +102,12 @@ const recommendedPosts: TimelinePost[] = [
         { date: "5月25日", exercise: "ブルガリアンスクワット", detail: "3セット x 12回 / 20kg" },
       ],
     },
-    message: "朝ラン5km完走しました。",
+    didTrain: true,
+    exercise: "ランニング",
+    duration: "27分",
+    summary: "朝ラン5kmを完走。少しずつペースを戻しています。",
+    detail: "5.0kmを27分12秒で完走。前半を抑えて後半にペースアップできました。次は脚トレと組み合わせて継続します。",
+    trainedAt: "今日 06:00 - 06:27",
     postedAt: "5時間前",
     likes: 19,
   },
@@ -114,7 +129,12 @@ const followingPosts: TimelinePost[] = [
         { date: "5月22日", exercise: "スクワット", detail: "5セット x 5回 / 120kg" },
       ],
     },
-    message: "BIG3のトレーニング完了！今日も追い込みました。",
+    didTrain: true,
+    exercise: "デッドリフト",
+    duration: "60分",
+    summary: "BIG3の日。デッドリフトを中心にしっかり追い込みました。",
+    detail: "デッドリフト160kgを3セット x 3回。補助種目としてルーマニアンデッドリフトと体幹トレーニングを実施しました。",
+    trainedAt: "今日 18:30 - 19:30",
     postedAt: "1時間前",
     likes: 52,
   },
@@ -122,8 +142,10 @@ const followingPosts: TimelinePost[] = [
 
 export default function Home() {
   const [view, setView] = useState<View>("timeline");
-  const [activeTab, setActiveTab] = useState<TimelineTab>("recommended");
+  const [activeTab, setActiveTab] = useState<TimelineTab>("following");
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
+  const [selectedPost, setSelectedPost] = useState<TimelinePost | null>(null);
+  const [likedPostIDs, setLikedPostIDs] = useState<Array<TimelinePost["id"]>>([]);
   const [workoutSession, setWorkoutSession] = useState<WorkoutSession | null>(null);
   const [completedPosts, setCompletedPosts] = useState<TimelinePost[]>([]);
   const [postingWorkout, setPostingWorkout] = useState(false);
@@ -131,12 +153,25 @@ export default function Home() {
 
   const openTimeline = () => {
     setSelectedProfile(null);
+    setSelectedPost(null);
+    setActiveTab("following");
     setView("timeline");
   };
 
   const openMemberProfile = (profile: Profile) => {
     setSelectedProfile(profile);
     setView("member");
+  };
+
+  const openPostDetail = (post: TimelinePost) => {
+    setSelectedPost(post);
+    setView("postDetail");
+  };
+
+  const toggleLike = (postID: TimelinePost["id"]) => {
+    setLikedPostIDs((ids) => (
+      ids.includes(postID) ? ids.filter((id) => id !== postID) : [...ids, postID]
+    ));
   };
 
   const startWorkout = () => {
@@ -214,7 +249,12 @@ export default function Home() {
       setCompletedPosts((posts) => [{
         id: `workout-${payload.id}`,
         author: myProfile,
-        message: `トレーニング完了！ ${formatWorkoutDuration(elapsedMs)}取り組みました。`,
+        didTrain: true,
+        exercise: "クイックスタート",
+        duration: formatWorkoutDuration(elapsedMs),
+        summary: `トレーニング完了！ ${formatWorkoutDuration(elapsedMs)}取り組みました。`,
+        detail: "クイックスタートから記録したトレーニングです。",
+        trainedAt: "たった今終了",
         postedAt: "たった今",
         likes: 0,
       }, ...posts]);
@@ -236,7 +276,19 @@ export default function Home() {
             activeTab={activeTab}
             onSelectTab={setActiveTab}
             onOpenProfile={openMemberProfile}
+            onOpenDetail={openPostDetail}
+            onToggleLike={toggleLike}
+            likedPostIDs={likedPostIDs}
             completedPosts={completedPosts}
+          />
+        )}
+        {view === "postDetail" && selectedPost && (
+          <PostDetailScreen
+            post={selectedPost}
+            liked={likedPostIDs.includes(selectedPost.id)}
+            onBack={openTimeline}
+            onOpenProfile={openMemberProfile}
+            onToggleLike={() => toggleLike(selectedPost.id)}
           />
         )}
         {view === "quickStart" && workoutSession && (
@@ -271,11 +323,17 @@ function TimelineScreen({
   activeTab,
   onSelectTab,
   onOpenProfile,
+  onOpenDetail,
+  onToggleLike,
+  likedPostIDs,
   completedPosts,
 }: {
   activeTab: TimelineTab;
   onSelectTab: (tab: TimelineTab) => void;
   onOpenProfile: (profile: Profile) => void;
+  onOpenDetail: (post: TimelinePost) => void;
+  onToggleLike: (postID: TimelinePost["id"]) => void;
+  likedPostIDs: Array<TimelinePost["id"]>;
   completedPosts: TimelinePost[];
 }) {
   const posts = activeTab === "recommended" ? recommendedPosts : [...completedPosts, ...followingPosts];
@@ -284,18 +342,18 @@ function TimelineScreen({
     <>
       <header className={styles.tabs} aria-label="タイムラインの表示切替">
         <button
-          className={activeTab === "recommended" ? styles.activeTab : ""}
-          onClick={() => onSelectTab("recommended")}
-          type="button"
-        >
-          おすすめ
-        </button>
-        <button
           className={activeTab === "following" ? styles.activeTab : ""}
           onClick={() => onSelectTab("following")}
           type="button"
         >
           フォロー中
+        </button>
+        <button
+          className={activeTab === "recommended" ? styles.activeTab : ""}
+          onClick={() => onSelectTab("recommended")}
+          type="button"
+        >
+          おすすめ
         </button>
       </header>
       <section className={styles.timeline} aria-label="投稿一覧">
@@ -310,23 +368,117 @@ function TimelineScreen({
               <UserIcon />
             </button>
             <div className={styles.postContent}>
-              <button
-                className={styles.author}
-                onClick={() => onOpenProfile(post.author)}
-                type="button"
-              >
-                {post.author.name}
-              </button>
-              <p>{post.message}</p>
-              <div className={styles.postMeta}>
+              <div className={styles.authorRow}>
+                <button
+                  className={styles.author}
+                  onClick={() => onOpenProfile(post.author)}
+                  type="button"
+                >
+                  {post.author.name}
+                </button>
                 <time>{post.postedAt}</time>
-                <span>いいね {post.likes}</span>
+              </div>
+              <span className={`${styles.trainingStatus} ${post.didTrain ? styles.done : styles.skipped}`}>
+                {post.didTrain ? "トレーニング完了" : "今日は休み"}
+              </span>
+              <div className={styles.workoutOverview}>
+                <strong>{post.exercise}</strong>
+                <span>{post.duration}</span>
+              </div>
+              <p className={styles.summary}>{post.summary}</p>
+              <div className={styles.postActions}>
+                <button className={styles.detailButton} onClick={() => onOpenDetail(post)} type="button">
+                  詳細を見る
+                  <ChevronIcon />
+                </button>
+                <button
+                  className={`${styles.likeButton} ${likedPostIDs.includes(post.id) ? styles.liked : ""}`}
+                  aria-pressed={likedPostIDs.includes(post.id)}
+                  aria-label={`${likedPostIDs.includes(post.id) ? "いいねを取り消す" : "いいねする"} 現在${post.likes + (likedPostIDs.includes(post.id) ? 1 : 0)}件`}
+                  onClick={() => onToggleLike(post.id)}
+                  type="button"
+                >
+                  <HeartIcon />
+                  {post.likes + (likedPostIDs.includes(post.id) ? 1 : 0)}
+                </button>
               </div>
             </div>
           </article>
         ))}
       </section>
     </>
+  );
+}
+
+function PostDetailScreen({
+  post,
+  liked,
+  onBack,
+  onOpenProfile,
+  onToggleLike,
+}: {
+  post: TimelinePost;
+  liked: boolean;
+  onBack: () => void;
+  onOpenProfile: (profile: Profile) => void;
+  onToggleLike: () => void;
+}) {
+  return (
+    <section className={styles.detailScreen}>
+      <header className={styles.profileHeader}>
+        <button className={styles.back} onClick={onBack} type="button" aria-label="タイムラインに戻る">
+          <ArrowIcon />
+        </button>
+        <h1>トレーニング詳細</h1>
+        <span className={styles.headerSpacer} />
+      </header>
+      <article className={styles.detailCard}>
+        <div className={styles.detailAuthor}>
+          <button
+            className={`${styles.avatar} ${styles[post.author.tone]}`}
+            aria-label={`${post.author.name}のプロフィールを見る`}
+            onClick={() => onOpenProfile(post.author)}
+            type="button"
+          >
+            <UserIcon />
+          </button>
+          <button className={styles.author} onClick={() => onOpenProfile(post.author)} type="button">
+            {post.author.name}
+          </button>
+          <time>{post.postedAt}</time>
+        </div>
+        <span className={`${styles.trainingStatus} ${post.didTrain ? styles.done : styles.skipped}`}>
+          {post.didTrain ? "トレーニング完了" : "今日は休み"}
+        </span>
+        <dl className={styles.detailMetrics}>
+          <div>
+            <dt>種目</dt>
+            <dd>{post.exercise}</dd>
+          </div>
+          <div>
+            <dt>時間</dt>
+            <dd>{post.duration}</dd>
+          </div>
+          <div>
+            <dt>実施日時</dt>
+            <dd>{post.trainedAt}</dd>
+          </div>
+        </dl>
+        <section className={styles.detailNote} aria-label="トレーニングメモ">
+          <h2>メモ</h2>
+          <p>{post.detail}</p>
+        </section>
+        <button
+          className={`${styles.detailLikeButton} ${liked ? styles.liked : ""}`}
+          aria-pressed={liked}
+          onClick={onToggleLike}
+          type="button"
+        >
+          <HeartIcon />
+          {liked ? "いいね済み" : "いいね"} {post.likes + (liked ? 1 : 0)}
+        </button>
+      </article>
+    </section>
   );
 }
 
@@ -494,7 +646,7 @@ function BottomNav({
   onQuickStart: () => void;
   onProfile: () => void;
 }) {
-  const timelineActive = activeView === "timeline" || activeView === "member";
+  const timelineActive = activeView === "timeline" || activeView === "postDetail" || activeView === "member";
 
   return (
     <nav className={styles.nav} aria-label="メインナビゲーション">
@@ -563,6 +715,22 @@ function StopIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <rect x="6.5" y="6.5" width="11" height="11" rx="1" />
+    </svg>
+  );
+}
+
+function ChevronIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m9 5.5 6.5 6.5L9 18.5" />
+    </svg>
+  );
+}
+
+function HeartIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M20 8.8c0 5.5-8 10.4-8 10.4S4 14.3 4 8.8a4.4 4.4 0 0 1 8-2.5 4.4 4.4 0 0 1 8 2.5Z" />
     </svg>
   );
 }
