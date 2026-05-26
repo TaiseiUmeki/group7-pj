@@ -3,6 +3,8 @@ package repository
 import (
 	"backend/internal/model"
 	"errors"
+	"strings"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -94,48 +96,206 @@ func (r *MySQLRepository) DeleteUser(id int) error {
 
 // GetWorkoutRecordByIDAndUserID はIDとユーザーIDから運動記録を取得します
 func (r *MySQLRepository) GetWorkoutRecordByIDAndUserID(id, userID int) (*model.WorkoutRecord, error) {
-	var record model.WorkoutRecord
-	if err := r.db.Where("id = ? AND user_id = ?", id, userID).First(&record).Error; err != nil {
+	var post model.TrainingPost
+	if err := r.db.Where("id = ? AND user_id = ? AND deleted_at IS NULL", id, userID).First(&post).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrWorkoutRecordNotFound
 		}
 		return nil, err
 	}
-	return &record, nil
+	return workoutRecordFromTrainingPost(&post), nil
 }
 
 // GetWorkoutRecordsByUserID はユーザーの運動記録一覧を取得します
 func (r *MySQLRepository) GetWorkoutRecordsByUserID(userID int) ([]*model.WorkoutRecord, error) {
-	var records []*model.WorkoutRecord
-	if err := r.db.Where("user_id = ?", userID).Order("start_time DESC").Find(&records).Error; err != nil {
+	var posts []*model.TrainingPost
+	if err := r.db.Where("user_id = ? AND deleted_at IS NULL", userID).Order("trained_on DESC, created_at DESC").Find(&posts).Error; err != nil {
 		return nil, err
+	}
+	records := make([]*model.WorkoutRecord, 0, len(posts))
+	for _, post := range posts {
+		records = append(records, workoutRecordFromTrainingPost(post))
 	}
 	return records, nil
 }
 
 // GetLatestWorkoutRecordByUserID はユーザーの最新の運動記録を取得します
 func (r *MySQLRepository) GetLatestWorkoutRecordByUserID(userID int) (*model.WorkoutRecord, error) {
-	var record model.WorkoutRecord
-	if err := r.db.Where("user_id = ?", userID).Order("start_time DESC").First(&record).Error; err != nil {
+	var post model.TrainingPost
+	if err := r.db.Where("user_id = ? AND deleted_at IS NULL", userID).Order("trained_on DESC, created_at DESC").First(&post).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrWorkoutRecordNotFound
 		}
 		return nil, err
 	}
-	return &record, nil
+	return workoutRecordFromTrainingPost(&post), nil
 }
 
 // CreateWorkoutRecord は運動記録を作成します
 func (r *MySQLRepository) CreateWorkoutRecord(record *model.WorkoutRecord) error {
-	return r.db.Create(record).Error
+	post := trainingPostFromWorkoutRecord(record)
+	if err := r.db.Create(post).Error; err != nil {
+		return err
+	}
+	applyTrainingPostToWorkoutRecord(record, post)
+	return nil
 }
 
 // UpdateWorkoutRecord は運動記録を更新します
 func (r *MySQLRepository) UpdateWorkoutRecord(record *model.WorkoutRecord) error {
-	return r.db.Save(record).Error
+	var post model.TrainingPost
+	if err := r.db.Where("id = ? AND user_id = ? AND deleted_at IS NULL", record.ID, record.UserID).First(&post).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrWorkoutRecordNotFound
+		}
+		return err
+	}
+
+	next := trainingPostFromWorkoutRecord(record)
+	post.DidTrain = next.DidTrain
+	post.TrainedOn = next.TrainedOn
+	post.StartedAt = next.StartedAt
+	post.EndedAt = next.EndedAt
+	post.ExerciseType = next.ExerciseType
+	post.DurationMinutes = next.DurationMinutes
+	post.Note = next.Note
+	post.Visibility = next.Visibility
+
+	if err := r.db.Save(&post).Error; err != nil {
+		return err
+	}
+	applyTrainingPostToWorkoutRecord(record, &post)
+	return nil
 }
 
 // DeleteWorkoutRecord は運動記録を削除します
 func (r *MySQLRepository) DeleteWorkoutRecord(id int) error {
-	return r.db.Delete(&model.WorkoutRecord{}, id).Error
+	now := time.Now()
+	return r.db.Model(&model.TrainingPost{}).Where("id = ?", id).Update("deleted_at", now).Error
+}
+
+func trainingPostFromWorkoutRecord(record *model.WorkoutRecord) *model.TrainingPost {
+	startedAt := record.StartTime
+	endedAt := record.StartTime.Add(time.Duration(record.DurationMinutes) * time.Minute)
+	duration := record.DurationMinutes
+	exerciseType := exerciseTypeID(record.ExerciseType)
+	note := strings.TrimSpace(record.ExerciseType)
+	visibility := "followers_and_recommended"
+
+	post := &model.TrainingPost{
+		ID:              record.ID,
+		UserID:          record.UserID,
+		DidTrain:        true,
+		TrainedOn:       dateOnly(record.StartTime),
+		StartedAt:       &startedAt,
+		EndedAt:         &endedAt,
+		ExerciseType:    exerciseType,
+		DurationMinutes: &duration,
+		Visibility:      visibility,
+	}
+	if note != "" {
+		post.Note = &note
+	}
+	return post
+}
+
+func workoutRecordFromTrainingPost(post *model.TrainingPost) *model.WorkoutRecord {
+	recordType := "normal"
+	if post.ExerciseType == nil {
+		recordType = "quick"
+	}
+
+	startTime := post.TrainedOn
+	if post.StartedAt != nil {
+		startTime = *post.StartedAt
+	}
+
+	duration := 0
+	if post.DurationMinutes != nil {
+		duration = *post.DurationMinutes
+	}
+
+	return &model.WorkoutRecord{
+		ID:              post.ID,
+		UserID:          post.UserID,
+		RecordType:      recordType,
+		ExerciseType:    exerciseTypeLabel(post.ExerciseType, post.Note),
+		StartTime:       startTime,
+		DurationMinutes: duration,
+		CreatedAt:       post.CreatedAt,
+		UpdatedAt:       post.UpdatedAt,
+	}
+}
+
+func applyTrainingPostToWorkoutRecord(record *model.WorkoutRecord, post *model.TrainingPost) {
+	mapped := workoutRecordFromTrainingPost(post)
+	record.ID = mapped.ID
+	record.UserID = mapped.UserID
+	record.RecordType = mapped.RecordType
+	record.ExerciseType = mapped.ExerciseType
+	record.StartTime = mapped.StartTime
+	record.DurationMinutes = mapped.DurationMinutes
+	record.CreatedAt = mapped.CreatedAt
+	record.UpdatedAt = mapped.UpdatedAt
+}
+
+func dateOnly(value time.Time) time.Time {
+	year, month, day := value.Date()
+	return time.Date(year, month, day, 0, 0, 0, 0, value.Location())
+}
+
+func exerciseTypeID(exercise string) *int {
+	normalized := strings.TrimSpace(exercise)
+	if normalized == "" {
+		return nil
+	}
+
+	mappings := []struct {
+		keyword string
+		id      int
+	}{
+		{keyword: "胸", id: 1},
+		{keyword: "ベンチ", id: 1},
+		{keyword: "背中", id: 2},
+		{keyword: "デッドリフト", id: 2},
+		{keyword: "脚", id: 3},
+		{keyword: "スクワット", id: 3},
+		{keyword: "肩", id: 4},
+		{keyword: "腕", id: 5},
+		{keyword: "体幹", id: 6},
+	}
+	for _, mapping := range mappings {
+		if strings.Contains(normalized, mapping.keyword) {
+			return &mapping.id
+		}
+	}
+
+	id := 0
+	return &id
+}
+
+func exerciseTypeLabel(exerciseType *int, note *string) string {
+	if note != nil && strings.TrimSpace(*note) != "" {
+		return *note
+	}
+	if exerciseType == nil {
+		return ""
+	}
+
+	switch *exerciseType {
+	case 1:
+		return "胸"
+	case 2:
+		return "背中"
+	case 3:
+		return "脚"
+	case 4:
+		return "肩"
+	case 5:
+		return "腕"
+	case 6:
+		return "体幹"
+	default:
+		return "その他"
+	}
 }
