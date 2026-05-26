@@ -1,484 +1,371 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
+import styles from "./page.module.css";
 
-type ApiUser = {
-  id: number;
-  name: string;
-  email: string;
+type TimelineTab = "recommended" | "following";
+type View = "timeline" | "quickStart" | "profile" | "member";
+type Tone = "blue" | "green" | "purple";
+
+type TrainingLog = {
+  date: string;
+  exercise: string;
+  detail: string;
 };
 
-type Screen = "home" | "search" | "messages" | "profile";
-
-type Partner = {
-  id: number;
+type Profile = {
   name: string;
-  initial: string;
-  level: string;
-  area: string;
-  part: string;
-  bench: string;
-  goal: string;
-  time: string;
+  handle: string;
+  bio: string;
+  tone: Tone;
+  records: string;
+  streak: string;
+  achievements: string;
+  logs: TrainingLog[];
 };
 
-type MessageThread = {
+type TimelinePost = {
   id: number;
-  name: string;
-  initial: string;
+  author: Profile;
   message: string;
-  time: string;
-  unread?: number;
+  postedAt: string;
+  likes: number;
 };
 
-const samplePartners: Partner[] = [
+const myProfile: Profile = {
+  name: "山田 太郎",
+  handle: "@taro_training",
+  bio: "週4日トレーニング中。BIG3を伸ばしながら、楽しく継続する仲間を探しています。",
+  tone: "blue",
+  records: "128",
+  streak: "18日",
+  achievements: "24",
+  logs: [
+    { date: "5月26日", exercise: "ベンチプレス", detail: "4セット x 8回 / 82.5kg" },
+    { date: "5月24日", exercise: "スクワット", detail: "5セット x 5回 / 110kg" },
+    { date: "5月23日", exercise: "デッドリフト", detail: "3セット x 5回 / 130kg" },
+  ],
+};
+
+const recommendedPosts: TimelinePost[] = [
   {
     id: 1,
-    name: "Taro",
-    initial: "T",
-    level: "中級者",
-    area: "渋谷",
-    part: "胸",
-    bench: "100kg",
-    goal: "ダイエット",
-    time: "今夜20:00",
+    author: {
+      name: "ユーザー名",
+      handle: "@bench_press100",
+      bio: "胸トレが好きです。次はベンチプレス105kgを目指しています。",
+      tone: "blue",
+      records: "86",
+      streak: "12日",
+      achievements: "15",
+      logs: [
+        { date: "5月26日", exercise: "ベンチプレス", detail: "1セット x 1回 / 100kg" },
+        { date: "5月24日", exercise: "インクラインプレス", detail: "4セット x 10回 / 32kg" },
+      ],
+    },
+    message: "今日のベンチプレス100kg達成！",
+    postedAt: "2時間前",
+    likes: 34,
   },
   {
     id: 2,
-    name: "Yuki",
-    initial: "Y",
-    level: "初心者",
-    area: "渋谷",
-    part: "胸",
-    bench: "50kg",
-    goal: "健康維持",
-    time: "今夜20:30",
-  },
-  {
-    id: 3,
-    name: "Ken",
-    initial: "K",
-    level: "上級者",
-    area: "六本木",
-    part: "脚",
-    bench: "130kg",
-    goal: "大会勢",
-    time: "明日18:00",
+    author: {
+      name: "別のユーザー",
+      handle: "@morning_runner",
+      bio: "朝ランと脚トレで体力作り。休日は一緒に走れる方を募集中です。",
+      tone: "green",
+      records: "64",
+      streak: "31日",
+      achievements: "12",
+      logs: [
+        { date: "5月26日", exercise: "ランニング", detail: "5.0km / 27分12秒" },
+        { date: "5月25日", exercise: "ブルガリアンスクワット", detail: "3セット x 12回 / 20kg" },
+      ],
+    },
+    message: "朝ラン5km完走しました。",
+    postedAt: "5時間前",
+    likes: 19,
   },
 ];
 
-const sampleMessages: MessageThread[] = [
-  {
-    id: 1,
-    name: "Taro",
-    initial: "T",
-    message: "タオルと飲み物あれば大丈夫です。装備はお任せします。",
-    time: "14:30",
-  },
-  {
-    id: 2,
-    name: "Yuki",
-    initial: "Y",
-    message: "もちろんです！場所はどこにしましょう？",
-    time: "10:20",
-    unread: 1,
-  },
+const followingPosts: TimelinePost[] = [
   {
     id: 3,
-    name: "Ken",
-    initial: "K",
-    message: "高重量に興味があります。一緒にやりませんか？",
-    time: "09:00",
-    unread: 2,
+    author: {
+      name: "フォロー中のユーザー",
+      handle: "@big3_challenge",
+      bio: "BIG3の合計500kgを目指して記録更新中。一緒に追い込みましょう。",
+      tone: "purple",
+      records: "142",
+      streak: "9日",
+      achievements: "37",
+      logs: [
+        { date: "5月26日", exercise: "デッドリフト", detail: "3セット x 3回 / 160kg" },
+        { date: "5月22日", exercise: "スクワット", detail: "5セット x 5回 / 120kg" },
+      ],
+    },
+    message: "BIG3のトレーニング完了！今日も追い込みました。",
+    postedAt: "1時間前",
+    likes: 52,
   },
-];
-
-const profileRecords = [
-  ["ベンチプレス", "100kg"],
-  ["スクワット", "150kg"],
-  ["デッドリフト", "180kg"],
 ];
 
 export default function Home() {
-  const [screen, setScreen] = useState<Screen>("home");
-  const [users, setUsers] = useState<ApiUser[]>([]);
-  const [apiState, setApiState] = useState<"loading" | "live" | "sample">(
-    "loading",
-  );
+  const [view, setView] = useState<View>("timeline");
+  const [activeTab, setActiveTab] = useState<TimelineTab>("recommended");
+  const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
 
-  useEffect(() => {
-    let active = true;
+  const openTimeline = () => {
+    setSelectedProfile(null);
+    setView("timeline");
+  };
 
-    const fetchUsers = async () => {
-      try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-        const response = await fetch(`${apiUrl}/api/users`);
-
-        if (!response.ok) {
-          throw new Error(`HTTP error: ${response.status}`);
-        }
-
-        const data = (await response.json()) as ApiUser[] | null;
-        if (!active) return;
-
-        setUsers(data ?? []);
-        setApiState("live");
-      } catch {
-        if (!active) return;
-        setApiState("sample");
-      }
-    };
-
-    fetchUsers();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const partners = useMemo(() => {
-    if (users.length === 0) return samplePartners;
-
-    return samplePartners.map((partner, index) => {
-      const apiUser = users[index];
-      if (!apiUser) return partner;
-
-      return {
-        ...partner,
-        id: apiUser.id,
-        name: apiUser.name || partner.name,
-        initial: (apiUser.name || partner.name).slice(0, 1).toUpperCase(),
-      };
-    });
-  }, [users]);
+  const openMemberProfile = (profile: Profile) => {
+    setSelectedProfile(profile);
+    setView("member");
+  };
 
   return (
-    <main className="app-shell">
-      <div className="phone-frame">
-        {screen === "home" && (
-          <HomeScreen
-            apiState={apiState}
-            partners={partners}
-            onNavigate={setScreen}
+    <main className={styles.app}>
+      <section className={styles.viewport}>
+        {view === "timeline" && (
+          <TimelineScreen
+            activeTab={activeTab}
+            onSelectTab={setActiveTab}
+            onOpenProfile={openMemberProfile}
           />
         )}
-        {screen === "search" && (
-          <SearchScreen partners={partners} onBack={() => setScreen("home")} />
+        {view === "quickStart" && <QuickStartScreen />}
+        {view === "profile" && <ProfileScreen profile={myProfile} own />}
+        {view === "member" && selectedProfile && (
+          <ProfileScreen profile={selectedProfile} onBack={openTimeline} />
         )}
-        {screen === "messages" && (
-          <MessagesScreen onBack={() => setScreen("home")} />
-        )}
-        {screen === "profile" && (
-          <ProfileScreen onBack={() => setScreen("home")} />
-        )}
-        <BottomNav active={screen} onNavigate={setScreen} />
-      </div>
+
+        <BottomNav
+          activeView={view}
+          onTimeline={openTimeline}
+          onQuickStart={() => setView("quickStart")}
+          onProfile={() => setView("profile")}
+        />
+        <button className={styles.help} type="button" aria-label="ヘルプを開く">
+          ?
+        </button>
+      </section>
     </main>
   );
 }
 
-function HomeScreen({
-  apiState,
-  partners,
-  onNavigate,
+function TimelineScreen({
+  activeTab,
+  onSelectTab,
+  onOpenProfile,
 }: {
-  apiState: "loading" | "live" | "sample";
-  partners: Partner[];
-  onNavigate: (screen: Screen) => void;
+  activeTab: TimelineTab;
+  onSelectTab: (tab: TimelineTab) => void;
+  onOpenProfile: (profile: Profile) => void;
 }) {
+  const posts = activeTab === "recommended" ? recommendedPosts : followingPosts;
+
   return (
     <>
-      <Header
-        title="💪 筋トレ合トレ"
-        subtitle="最適なパートナーを見つける"
-      />
-      <section className="screen-content home-content">
-        <div className="hero-panel">
-          <h1>トレーニングパートナーを探そう</h1>
-          <p>一人じゃない。一緒にトレーニングしよう。</p>
-        </div>
-
-        <div className="feature-grid">
-          <button className="feature-card blue" onClick={() => onNavigate("search")}>
-            <span>🔍</span>
-            パートナー検索
-          </button>
-          <button className="feature-card purple" onClick={() => onNavigate("profile")}>
-            <span>👤</span>
-            プロフィール
-          </button>
-          <button className="feature-card green" onClick={() => onNavigate("messages")}>
-            <span>💬</span>
-            メッセージ
-          </button>
-          <button className="feature-card orange" type="button">
-            <span>🗺️</span>
-            ジムマップ
-          </button>
-          <Link href="/login" className="feature-card blue" style={{ gridColumn: "1 / -1" }}>
-            <span>🔐</span>
-            ログイン
-          </Link>
-        </div>
-
-        <div className="section-heading">
-          <h2>最近のマッチング</h2>
-          <span>
-            {apiState === "live"
-              ? "API接続中"
-              : apiState === "loading"
-                ? "確認中"
-                : "サンプル表示"}
-          </span>
-        </div>
-
-        <div className="match-list">
-          {partners.map((partner) => (
-            <CompactMatchCard key={partner.id} partner={partner} />
-          ))}
-        </div>
-      </section>
-    </>
-  );
-}
-
-function SearchScreen({
-  partners,
-  onBack,
-}: {
-  partners: Partner[];
-  onBack: () => void;
-}) {
-  return (
-    <>
-      <TopBar title="パートナー検索" onBack={onBack} />
-      <section className="screen-content search-content">
-        <SearchField label="⏰ 時間帯" value="20:00" accessory="◴" />
-        <SearchField label="📍 エリア" value="渋谷" accessory="⌄" />
-        <SearchField label="💪 トレーニング部位" value="胸" accessory="⌄" />
-        <SearchField label="🎯 レベル" value="全て" accessory="⌄" />
-
-        <button className="primary-action" type="button">
-          🔍 検索
+      <header className={styles.tabs} aria-label="タイムラインの表示切替">
+        <button
+          className={activeTab === "recommended" ? styles.activeTab : ""}
+          onClick={() => onSelectTab("recommended")}
+          type="button"
+        >
+          おすすめ
         </button>
-
-        <p className="result-count">{partners.length} 件のパートナーが見つかりました</p>
-
-        <div className="partner-list">
-          {partners.slice(0, 2).map((partner) => (
-            <PartnerCard key={partner.id} partner={partner} />
-          ))}
-        </div>
-      </section>
-    </>
-  );
-}
-
-function MessagesScreen({ onBack }: { onBack: () => void }) {
-  return (
-    <>
-      <TopBar title="メッセージ" onBack={onBack} />
-      <section className="message-list">
-        {sampleMessages.map((thread) => (
-          <button className="message-row" key={thread.id} type="button">
-            <Avatar initial={thread.initial} />
-            <div className="message-copy">
-              <strong>{thread.name}</strong>
-              <p>{thread.message}</p>
+        <button
+          className={activeTab === "following" ? styles.activeTab : ""}
+          onClick={() => onSelectTab("following")}
+          type="button"
+        >
+          フォロー中
+        </button>
+      </header>
+      <section className={styles.timeline} aria-label="投稿一覧">
+        {posts.map((post) => (
+          <article className={styles.post} key={post.id}>
+            <button
+              className={`${styles.avatar} ${styles[post.author.tone]}`}
+              aria-label={`${post.author.name}のプロフィールを見る`}
+              onClick={() => onOpenProfile(post.author)}
+              type="button"
+            >
+              <UserIcon />
+            </button>
+            <div className={styles.postContent}>
+              <button
+                className={styles.author}
+                onClick={() => onOpenProfile(post.author)}
+                type="button"
+              >
+                {post.author.name}
+              </button>
+              <p>{post.message}</p>
+              <div className={styles.postMeta}>
+                <time>{post.postedAt}</time>
+                <span>いいね {post.likes}</span>
+              </div>
             </div>
-            <div className="message-meta">
-              <span>{thread.time}</span>
-              {thread.unread && <b>{thread.unread}</b>}
-            </div>
-          </button>
+          </article>
         ))}
       </section>
     </>
   );
 }
 
-function ProfileScreen({ onBack }: { onBack: () => void }) {
-  return (
-    <>
-      <TopBar title="プロフィール" onBack={onBack} action="編集" />
-      <section className="screen-content profile-content">
-        <div className="profile-hero">
-          <div className="profile-avatar">太</div>
-          <h1>太郎</h1>
-          <p>28歳・男</p>
-        </div>
-
-        <InfoPanel label="📍 活動エリア" value="渋谷" />
-        <InfoPanel label="🏋️ 筋トレ歴" value="3年" />
-        <InfoPanel label="🎯 目指すカテゴリ" value="ダイエット" />
-        <InfoPanel
-          label="📝 自己紹介"
-          value="筋トレ3年目。同じくらいのレベルの人と一緒にトレーニングしたい！"
-          multiline
-        />
-
-        <h2 className="records-title">📊 各種記録</h2>
-        <div className="records-list">
-          {profileRecords.map(([label, value]) => (
-            <div className="record-row" key={label}>
-              <span>{label}</span>
-              <strong>{value}</strong>
-            </div>
-          ))}
-        </div>
-      </section>
-    </>
-  );
-}
-
-function Header({ title, subtitle }: { title: string; subtitle: string }) {
-  return (
-    <header className="home-header">
-      <div>
-        <h1>{title}</h1>
-        <p>{subtitle}</p>
-      </div>
-    </header>
-  );
-}
-
-function TopBar({
-  title,
+function ProfileScreen({
+  profile,
+  own = false,
   onBack,
-  action,
 }: {
-  title: string;
-  onBack: () => void;
-  action?: string;
+  profile: Profile;
+  own?: boolean;
+  onBack?: () => void;
 }) {
   return (
-    <header className="top-bar">
-      <button aria-label="戻る" onClick={onBack} type="button">
-        ←
-      </button>
-      <h1>{title}</h1>
-      <button className="top-action" type="button">
-        {action}
-      </button>
-    </header>
+    <section className={styles.profileScreen}>
+      <header className={styles.profileHeader}>
+        {onBack ? (
+          <button className={styles.back} onClick={onBack} type="button" aria-label="タイムラインに戻る">
+            <ArrowIcon />
+          </button>
+        ) : (
+          <span className={styles.headerSpacer} />
+        )}
+        <h1>プロフィール</h1>
+        {own ? <button className={styles.edit} type="button">編集</button> : <span className={styles.headerSpacer} />}
+      </header>
+
+      <div className={styles.profileBody}>
+        <div className={`${styles.largeAvatar} ${styles[profile.tone]}`}>
+          <UserIcon />
+        </div>
+        <h2>{profile.name}</h2>
+        <p className={styles.handle}>{profile.handle}</p>
+        <p className={styles.bio}>{profile.bio}</p>
+
+        <div className={styles.stats}>
+          <Stat value={profile.records} label="記録数" />
+          <Stat value={profile.streak} label="連続日数" />
+          <Stat value={profile.achievements} label="達成数" />
+        </div>
+
+        <div className={styles.logHeader}>
+          <h3>トレーニングログ</h3>
+          <span>最近の記録</span>
+        </div>
+        <div className={styles.logs}>
+          {profile.logs.map((log) => (
+            <article className={styles.log} key={`${log.date}-${log.exercise}`}>
+              <time>{log.date}</time>
+              <strong>{log.exercise}</strong>
+              <p>{log.detail}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function QuickStartScreen() {
+  return (
+    <section className={styles.quickScreen}>
+      <header className={styles.simpleHeader}>
+        <h1>クイックスタート</h1>
+        <p>今日のトレーニングを記録</p>
+      </header>
+      <div className={styles.startPanel}>
+        <span className={styles.lightning}><BoltIcon /></span>
+        <h2>新しいワークアウト</h2>
+        <p>種目を選んですぐに記録を開始できます。</p>
+        <button className={styles.startButton} type="button">トレーニングを開始</button>
+      </div>
+      <h2 className={styles.routineTitle}>おすすめメニュー</h2>
+      <div className={styles.routines}>
+        <button type="button"><strong>胸・肩</strong><span>ベンチプレス / ショルダープレス</span></button>
+        <button type="button"><strong>脚</strong><span>スクワット / レッグプレス</span></button>
+      </div>
+    </section>
+  );
+}
+
+function Stat({ value, label }: { value: string; label: string }) {
+  return (
+    <div className={styles.stat}>
+      <strong>{value}</strong>
+      <span>{label}</span>
+    </div>
   );
 }
 
 function BottomNav({
-  active,
-  onNavigate,
+  activeView,
+  onTimeline,
+  onQuickStart,
+  onProfile,
 }: {
-  active: Screen;
-  onNavigate: (screen: Screen) => void;
+  activeView: View;
+  onTimeline: () => void;
+  onQuickStart: () => void;
+  onProfile: () => void;
 }) {
-  const items: { screen: Screen; icon: string; label: string }[] = [
-    { screen: "home", icon: "🏠", label: "ホーム" },
-    { screen: "search", icon: "🔍", label: "検索" },
-    { screen: "messages", icon: "💬", label: "メッセージ" },
-    { screen: "profile", icon: "👤", label: "プロフィール" },
-  ];
+  const timelineActive = activeView === "timeline" || activeView === "member";
 
   return (
-    <nav className="bottom-nav">
-      {items.map((item) => (
-        <button
-          className={active === item.screen ? "active" : ""}
-          key={item.screen}
-          onClick={() => onNavigate(item.screen)}
-          type="button"
-        >
-          {item.screen === "messages" && <span className="nav-badge">3</span>}
-          <span className="nav-icon">{item.icon}</span>
-          <span>{item.label}</span>
-        </button>
-      ))}
+    <nav className={styles.nav} aria-label="メインナビゲーション">
+      <button className={timelineActive ? styles.activeNav : ""} onClick={onTimeline} type="button">
+        <HomeIcon />
+        <span>TL</span>
+      </button>
+      <button
+        className={`${styles.quickButton} ${activeView === "quickStart" ? styles.quickActive : ""}`}
+        onClick={onQuickStart}
+        type="button"
+      >
+        <BoltIcon />
+        <span>START</span>
+      </button>
+      <button className={activeView === "profile" ? styles.activeNav : ""} onClick={onProfile} type="button">
+        <UserIcon />
+        <span>プロフィール</span>
+      </button>
     </nav>
   );
 }
 
-function Avatar({ initial }: { initial: string }) {
-  return <div className="avatar">{initial}</div>;
-}
-
-function CompactMatchCard({ partner }: { partner: Partner }) {
+function HomeIcon() {
   return (
-    <article className="compact-card">
-      <Avatar initial={partner.initial} />
-      <div>
-        <h3>{partner.name}</h3>
-        <p>{partner.level}</p>
-        <span>
-          📍 {partner.area}・⏰ {partner.time}
-        </span>
-      </div>
-      <button aria-label={`${partner.name}にいいね`} type="button">
-        ❤️
-      </button>
-    </article>
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3.5 10.7 12 3.8l8.5 6.9v9.5H14v-5.4h-4v5.4H3.5z" />
+    </svg>
   );
 }
 
-function PartnerCard({ partner }: { partner: Partner }) {
+function UserIcon() {
   return (
-    <article className="partner-card">
-      <div className="partner-head">
-        <Avatar initial={partner.initial} />
-        <div>
-          <h3>{partner.name}</h3>
-          <p>{partner.level}</p>
-        </div>
-        <button aria-label={`${partner.name}にいいね`} type="button">
-          ❤️
-        </button>
-      </div>
-      <div className="partner-detail">
-        <p>📍 {partner.area}</p>
-        <p>🏋️ ベンチプレス: {partner.bench}</p>
-        <p>🎯 目標: {partner.goal}</p>
-        <p>⏰ トレ時間: {partner.time}</p>
-      </div>
-      <div className="partner-actions">
-        <button type="button">申し込む</button>
-        <button type="button">詳細</button>
-      </div>
-    </article>
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="7.5" r="4" />
+      <path d="M4.5 20v-3.2c0-3.1 3.4-5.1 7.5-5.1s7.5 2 7.5 5.1V20" />
+    </svg>
   );
 }
 
-function SearchField({
-  label,
-  value,
-  accessory,
-}: {
-  label: string;
-  value: string;
-  accessory: string;
-}) {
+function BoltIcon() {
   return (
-    <label className="search-field">
-      <span>{label}</span>
-      <button type="button">
-        {value}
-        <b>{accessory}</b>
-      </button>
-    </label>
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m13.2 2.5-8 11h6.1l-.6 8 8.1-11h-6.1z" />
+    </svg>
   );
 }
 
-function InfoPanel({
-  label,
-  value,
-  multiline,
-}: {
-  label: string;
-  value: string;
-  multiline?: boolean;
-}) {
+function ArrowIcon() {
   return (
-    <article className={multiline ? "info-panel multiline" : "info-panel"}>
-      <p>{label}</p>
-      <strong>{value}</strong>
-    </article>
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M15 4.5 7.5 12 15 19.5M8 12h11" />
+    </svg>
   );
 }
