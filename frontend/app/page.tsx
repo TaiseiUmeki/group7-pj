@@ -783,7 +783,7 @@ function ProfileScreen({
                 {profile.tags?.map((tag) => <span key={tag}>#{tag}</span>)}
               </div>
             ) : null}
-            {isInactive ? <p className={styles.inactiveStatus}>{inactiveDays}日サボり中</p> : null}
+            {isInactive ? <p className={styles.inactiveStatus}>前回のトレーニングから {inactiveDays}日</p> : null}
           </section>
         ) : null}
 
@@ -903,7 +903,7 @@ function ProfileEditScreen({
           <textarea maxLength={160} onChange={(event) => setBio(event.target.value)} required rows={4} value={bio} />
         </label>
         <label className={styles.formField}>
-          <span>サボり判定日数</span>
+          <span>トレーニング頻度</span>
           <div className={styles.daysField}>
             <input
               min="1"
@@ -912,7 +912,7 @@ function ProfileEditScreen({
               type="number"
               value={inactivityDays}
             />
-            <span>日以上投稿がないとサボり判定</span>
+            <span>日間隔</span>
           </div>
         </label>
         <fieldset className={styles.tagSelector}>
