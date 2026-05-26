@@ -44,7 +44,7 @@
 
 .timeline {
   display: grid;
-  gap: 18px;
+  gap: 16px;
   padding: 28px clamp(18px, 3vw, 32px);
 }
 
@@ -52,8 +52,7 @@
   display: flex;
   align-items: flex-start;
   gap: 16px;
-  min-height: 146px;
-  padding: 22px 24px;
+  padding: 20px 22px;
   border-radius: 16px;
   border: 1px solid #e3e8f0;
   background: #fff;
@@ -110,19 +109,220 @@
   cursor: pointer;
 }
 
-.postContent p {
-  margin: 10px 0 16px;
+.authorRow {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.authorRow time {
+  margin-left: auto;
+  color: #778397;
+  font-size: 12px;
+}
+
+.trainingStatus {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 5px 10px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.done {
+  color: #247b48;
+  background: #e2f7e9;
+}
+
+.skipped {
+  color: #667488;
+  background: #eef1f5;
+}
+
+.workoutOverview {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 13px;
+}
+
+.workoutOverview strong {
+  color: #162238;
+  font-size: 17px;
+}
+
+.workoutOverview span {
+  color: #536175;
+  font-size: 14px;
+}
+
+.summary {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  margin: 9px 0 17px;
   color: #4e5b6f;
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
-.postMeta {
+.postActions {
   display: flex;
-  gap: 20px;
-  color: #7a8595;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.detailButton,
+.likeButton {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.detailButton {
+  gap: 5px;
+  background: transparent;
+  color: #316cf0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.detailButton svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.likeButton {
+  gap: 7px;
+  padding: 0 13px;
+  border: 1px solid #e1e7ef;
+  border-radius: 20px;
+  background: #fff;
+  color: #657287;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 700;
+}
+
+.likeButton svg,
+.detailLikeButton svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.liked {
+  border-color: #f3cad0;
+  background: #fff2f5;
+  color: #e34466;
+}
+
+.liked svg {
+  fill: currentColor;
+}
+
+.detailScreen {
+  min-height: calc(100vh - 102px);
+}
+
+.detailCard {
+  width: min(calc(100% - 36px), 620px);
+  margin: 28px auto;
+  padding: 24px;
+  border: 1px solid #e4eaf2;
+  border-radius: 20px;
+  background: #fff;
+}
+
+.detailAuthor {
+  display: grid;
+  grid-template-columns: 54px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.detailAuthor time {
+  color: #778397;
+  font-size: 12px;
+}
+
+.detailMetrics {
+  display: grid;
+  gap: 0;
+  margin: 22px 0;
+  border: 1px solid #e6ebf2;
+  border-radius: 14px;
+}
+
+.detailMetrics div {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #edf1f6;
+}
+
+.detailMetrics div:last-child {
+  border: 0;
+}
+
+.detailMetrics dt {
+  color: #718096;
+  font-size: 13px;
+}
+
+.detailMetrics dd {
+  margin: 0;
+  color: #19263b;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.detailNote h2 {
+  margin: 0 0 9px;
+  font-size: 15px;
+}
+
+.detailNote p {
+  margin: 0 0 22px;
+  color: #4e5b6f;
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+.detailLikeButton {
+  width: 100%;
+  min-height: 49px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 1px solid #e1e7ef;
+  border-radius: 25px;
+  background: #fff;
+  color: #58677d;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.detailLikeButton.liked {
+  border-color: #f3cad0;
+  background: #fff2f5;
+  color: #e34466;
 }
 
 .profileScreen {
@@ -585,8 +785,7 @@
   }
 
   .post {
-    min-height: 126px;
-    padding: 18px 16px;
+    padding: 17px 15px;
     gap: 12px;
   }
 
@@ -604,9 +803,22 @@
     font-size: 16px;
   }
 
-  .postContent p {
-    margin: 7px 0 12px;
+  .summary {
+    margin: 8px 0 14px;
     font-size: 14px;
+  }
+
+  .authorRow {
+    gap: 8px;
+  }
+
+  .workoutOverview strong {
+    font-size: 16px;
+  }
+
+  .detailCard {
+    margin-top: 18px;
+    padding: 18px;
   }
 
   .profileHeader {
