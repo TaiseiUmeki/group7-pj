@@ -16,6 +16,33 @@ type TrainingLog = {
   detail: string;
 };
 
+type Badge = {
+  title: string;
+  description: string;
+  earnedAt: string;
+  tone: "gold" | "blue" | "green";
+};
+
+type Connection = {
+  name: string;
+  handle: string;
+  tone: Tone;
+  relation: string;
+};
+
+const availableTags = [
+  "やる気",
+  "大会勢",
+  "健康維持",
+  "ダイエット",
+  "筋肥大",
+  "パワーリフティング",
+  "ボディメイク",
+  "初心者",
+] as const;
+
+type ProfileTag = (typeof availableTags)[number];
+
 type Profile = {
   name: string;
   handle: string;
@@ -25,6 +52,12 @@ type Profile = {
   streak: string;
   achievements: string;
   logs: TrainingLog[];
+  badges?: Badge[];
+  following?: Connection[];
+  followers?: Connection[];
+  inactivityDays?: number;
+  tags?: ProfileTag[];
+  lastPostedAt?: string;
 };
 
 type TimelinePost = {
@@ -87,10 +120,29 @@ const myProfile: Profile = {
   streak: "18日",
   achievements: "24",
   logs: [
-    { date: "5月26日", exercise: "ベンチプレス", detail: "4セット x 8回 / 82.5kg" },
-    { date: "5月24日", exercise: "スクワット", detail: "5セット x 5回 / 110kg" },
-    { date: "5月23日", exercise: "デッドリフト", detail: "3セット x 5回 / 130kg" },
+    { date: "5月21日", exercise: "ベンチプレス", detail: "4セット x 8回 / 82.5kg" },
+    { date: "5月20日", exercise: "スクワット", detail: "5セット x 5回 / 110kg" },
+    { date: "5月18日", exercise: "デッドリフト", detail: "3セット x 5回 / 130kg" },
   ],
+  badges: [
+    { title: "継続の達人", description: "14日連続で記録", earnedAt: "5月20日獲得", tone: "gold" },
+    { title: "ベンチ100", description: "ベンチプレス100kg達成", earnedAt: "4月18日獲得", tone: "blue" },
+    { title: "朝活メンバー", description: "朝トレを10回記録", earnedAt: "3月28日獲得", tone: "green" },
+  ],
+  following: [
+    { name: "佐藤 健", handle: "@big3_challenge", tone: "purple", relation: "相互フォロー" },
+    { name: "鈴木 美咲", handle: "@morning_runner", tone: "green", relation: "フォロー中" },
+    { name: "田中 涼", handle: "@bench_press100", tone: "blue", relation: "相互フォロー" },
+  ],
+  followers: [
+    { name: "佐藤 健", handle: "@big3_challenge", tone: "purple", relation: "フォロー中" },
+    { name: "田中 涼", handle: "@bench_press100", tone: "blue", relation: "フォロー中" },
+    { name: "伊藤 葵", handle: "@core_training", tone: "green", relation: "フォローする" },
+    { name: "高橋 翔", handle: "@run_and_lift", tone: "purple", relation: "フォローする" },
+  ],
+  inactivityDays: 3,
+  tags: ["やる気", "筋肥大", "初心者"],
+  lastPostedAt: "2026-05-21T19:00:00+09:00",
 };
 
 const recommendedPosts: TimelinePost[] = [
@@ -173,6 +225,7 @@ const followingPosts: TimelinePost[] = [
 
 export default function Home() {
   const [view, setView] = useState<View>("timeline");
+  const [currentProfile, setCurrentProfile] = useState(myProfile);
   const [activeTab, setActiveTab] = useState<TimelineTab>("following");
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [selectedPost, setSelectedPost] = useState<TimelinePost | null>(null);
@@ -226,10 +279,11 @@ export default function Home() {
     void loadWorkoutRecords();
   }, [loadWorkoutRecords]);
 
-  const ownProfile = {
-    ...myProfile,
+  const ownProfile: Profile = {
+    ...currentProfile,
     records: loadingWorkoutRecords ? "..." : String(workoutRecords.length),
     logs: workoutRecords.length > 0 ? workoutRecords.map(formatWorkoutLog).slice(0, 3) : [],
+    lastPostedAt: getLatestPostedAt(workoutRecords) ?? currentProfile.lastPostedAt,
   };
 
   const openTimeline = () => {
@@ -334,7 +388,7 @@ export default function Home() {
 
       setCompletedPosts((posts) => [{
         id: `workout-${payload.id}`,
-        author: myProfile,
+        author: currentProfile,
         didTrain: true,
         exercise: "クイックスタート",
         duration: formatWorkoutDuration(elapsedMs),
@@ -344,6 +398,7 @@ export default function Home() {
         postedAt: "たった今",
         likes: 0,
       }, ...posts]);
+      setCurrentProfile((profile) => ({ ...profile, lastPostedAt: new Date().toISOString() }));
       setWorkoutSession(null);
       await loadWorkoutRecords();
       setActiveTab("following");
@@ -395,7 +450,7 @@ export default function Home() {
       const note = input.note.trim();
       setCompletedPosts((posts) => [{
         id: `workout-${payload.id}`,
-        author: myProfile,
+        author: currentProfile,
         didTrain: true,
         exercise: input.exercise,
         duration: `${input.durationMinutes}分`,
@@ -406,6 +461,7 @@ export default function Home() {
         likes: 0,
       }, ...posts]);
       await loadWorkoutRecords();
+      setCurrentProfile((profile) => ({ ...profile, lastPostedAt: new Date().toISOString() }));
       setActiveTab("following");
       openTimeline();
     } catch (error) {
@@ -456,7 +512,14 @@ export default function Home() {
             onSubmit={createDetailedWorkout}
           />
         )}
-        {view === "profile" && <ProfileScreen profile={ownProfile} own recordErrorMessage={workoutRecordsError} />}
+        {view === "profile" && (
+          <ProfileScreen
+            profile={ownProfile}
+            own
+            onUpdate={setCurrentProfile}
+            recordErrorMessage={workoutRecordsError}
+          />
+        )}
         {view === "member" && selectedProfile && (
           <ProfileScreen profile={selectedProfile} onBack={openTimeline} />
         )}
@@ -649,12 +712,44 @@ function ProfileScreen({
   own = false,
   onBack,
   recordErrorMessage,
+  onUpdate,
 }: {
   profile: Profile;
   own?: boolean;
   onBack?: () => void;
   recordErrorMessage?: string;
+  onUpdate?: (profile: Profile) => void;
 }) {
+  const [panel, setPanel] = useState<"summary" | "edit" | "following" | "followers">("summary");
+  const inactiveDays = getDaysWithoutPost(profile.lastPostedAt);
+  const isInactive = Boolean(
+    own && profile.inactivityDays && inactiveDays >= profile.inactivityDays,
+  );
+
+  if (own && panel === "edit") {
+    return (
+      <ProfileEditScreen
+        profile={profile}
+        onBack={() => setPanel("summary")}
+        onSave={(updatedProfile) => {
+          onUpdate?.(updatedProfile);
+          setPanel("summary");
+        }}
+      />
+    );
+  }
+
+  if (own && (panel === "following" || panel === "followers")) {
+    const people = panel === "following" ? profile.following ?? [] : profile.followers ?? [];
+    return (
+      <ConnectionsScreen
+        people={people}
+        title={panel === "following" ? "フォロー" : "フォロワー"}
+        onBack={() => setPanel("summary")}
+      />
+    );
+  }
+
   return (
     <section className={styles.profileScreen}>
       <header className={styles.profileHeader}>
@@ -666,7 +761,11 @@ function ProfileScreen({
           <span className={styles.headerSpacer} />
         )}
         <h1>プロフィール</h1>
-        {own ? <button className={styles.edit} type="button">編集</button> : <span className={styles.headerSpacer} />}
+        {own ? (
+          <button className={styles.edit} onClick={() => setPanel("edit")} type="button">編集</button>
+        ) : (
+          <span className={styles.headerSpacer} />
+        )}
       </header>
 
       <div className={styles.profileBody}>
@@ -677,14 +776,57 @@ function ProfileScreen({
         <p className={styles.handle}>{profile.handle}</p>
         <p className={styles.bio}>{profile.bio}</p>
 
+        {own && ((profile.tags?.length ?? 0) > 0 || isInactive) ? (
+          <section className={styles.profilePreferences} aria-label="プロフィールタグと状態">
+            {(profile.tags?.length ?? 0) > 0 ? (
+              <div className={styles.profileTags}>
+                {profile.tags?.map((tag) => <span key={tag}>#{tag}</span>)}
+              </div>
+            ) : null}
+            {isInactive ? <p className={styles.inactiveStatus}>{inactiveDays}日サボり中</p> : null}
+          </section>
+        ) : null}
+
+        {own ? (
+          <div className={styles.socialStats} aria-label="フォロー情報">
+            <button onClick={() => setPanel("following")} type="button">
+              <strong>{profile.following?.length ?? 0}</strong>
+              <span>フォロー</span>
+            </button>
+            <button onClick={() => setPanel("followers")} type="button">
+              <strong>{profile.followers?.length ?? 0}</strong>
+              <span>フォロワー</span>
+            </button>
+          </div>
+        ) : null}
+
         <div className={styles.stats}>
           <Stat value={profile.records} label="記録数" />
           <Stat value={profile.streak} label="連続日数" />
           <Stat value={profile.achievements} label="達成数" />
         </div>
 
+        {own ? (
+          <section className={styles.badges} aria-label="自分のバッジ">
+            <div className={styles.logHeader}>
+              <h3>自分のバッジ</h3>
+              <span>{profile.badges?.length ?? 0}個獲得</span>
+            </div>
+            <div className={styles.badgeGrid}>
+              {profile.badges?.map((badge) => (
+                <article className={styles.badgeCard} key={badge.title}>
+                  <span className={`${styles.badgeMark} ${styles[badge.tone]}`}>★</span>
+                  <strong>{badge.title}</strong>
+                  <p>{badge.description}</p>
+                  <small>{badge.earnedAt}</small>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         <div className={styles.logHeader}>
-          <h3>トレーニングログ</h3>
+          <h3>{own ? "自分のログ" : "トレーニングログ"}</h3>
           <span>最近の記録</span>
         </div>
         {recordErrorMessage ? <p className={styles.profileNotice}>{recordErrorMessage}</p> : null}
@@ -701,6 +843,132 @@ function ProfileScreen({
             <p className={styles.emptyState}>まだトレーニング記録がありません。</p>
           )}
         </div>
+      </div>
+    </section>
+  );
+}
+
+function ProfileEditScreen({
+  profile,
+  onBack,
+  onSave,
+}: {
+  profile: Profile;
+  onBack: () => void;
+  onSave: (profile: Profile) => void;
+}) {
+  const [name, setName] = useState(profile.name);
+  const [bio, setBio] = useState(profile.bio);
+  const [inactivityDays, setInactivityDays] = useState(String(profile.inactivityDays ?? 3));
+  const [tags, setTags] = useState<ProfileTag[]>(profile.tags ?? []);
+
+  const toggleTag = (tag: ProfileTag) => {
+    setTags((selectedTags) => (
+      selectedTags.includes(tag)
+        ? selectedTags.filter((selectedTag) => selectedTag !== tag)
+        : availableTags.filter((availableTag) => [...selectedTags, tag].includes(availableTag))
+    ));
+  };
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    onSave({
+      ...profile,
+      name: name.trim(),
+      bio: bio.trim(),
+      inactivityDays: Number(inactivityDays),
+      tags,
+    });
+  };
+
+  return (
+    <section className={styles.profileScreen}>
+      <header className={styles.profileHeader}>
+        <button className={styles.back} onClick={onBack} type="button" aria-label="プロフィールに戻る">
+          <ArrowIcon />
+        </button>
+        <h1>プロフィール編集</h1>
+        <span className={styles.headerSpacer} />
+      </header>
+      <form className={styles.profileEditor} onSubmit={handleSubmit}>
+        <div className={`${styles.largeAvatar} ${styles[profile.tone]}`}>
+          <UserIcon />
+        </div>
+        <label className={styles.formField}>
+          <span>表示名</span>
+          <input maxLength={30} onChange={(event) => setName(event.target.value)} required value={name} />
+        </label>
+        <label className={styles.formField}>
+          <span>自己紹介</span>
+          <textarea maxLength={160} onChange={(event) => setBio(event.target.value)} required rows={4} value={bio} />
+        </label>
+        <label className={styles.formField}>
+          <span>サボり判定日数</span>
+          <div className={styles.daysField}>
+            <input
+              min="1"
+              onChange={(event) => setInactivityDays(event.target.value)}
+              required
+              type="number"
+              value={inactivityDays}
+            />
+            <span>日以上投稿がないとサボり判定</span>
+          </div>
+        </label>
+        <fieldset className={styles.tagSelector}>
+          <legend>タグ</legend>
+          <div>
+            {availableTags.map((tag) => (
+              <button
+                aria-pressed={tags.includes(tag)}
+                className={tags.includes(tag) ? styles.selectedTag : ""}
+                key={tag}
+                onClick={() => toggleTag(tag)}
+                type="button"
+              >
+                #{tag}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        <button className={styles.submitRecordButton} type="submit">変更を保存</button>
+      </form>
+    </section>
+  );
+}
+
+function ConnectionsScreen({
+  people,
+  title,
+  onBack,
+}: {
+  people: Connection[];
+  title: string;
+  onBack: () => void;
+}) {
+  return (
+    <section className={styles.profileScreen}>
+      <header className={styles.profileHeader}>
+        <button className={styles.back} onClick={onBack} type="button" aria-label="プロフィールに戻る">
+          <ArrowIcon />
+        </button>
+        <h1>{title}</h1>
+        <span className={styles.headerSpacer} />
+      </header>
+      <div className={styles.connections}>
+        <p className={styles.connectionCount}>{people.length}人</p>
+        {people.map((person) => (
+          <article className={styles.connection} key={person.handle}>
+            <div className={`${styles.avatar} ${styles[person.tone]}`}>
+              <UserIcon />
+            </div>
+            <div>
+              <strong>{person.name}</strong>
+              <span>{person.handle}</span>
+            </div>
+            <small>{person.relation}</small>
+          </article>
+        ))}
       </div>
     </section>
   );
@@ -966,6 +1234,29 @@ function formatWorkoutLog(record: WorkoutRecord): TrainingLog {
     exercise,
     detail,
   };
+}
+
+function getDaysWithoutPost(lastPostedAt?: string) {
+  if (!lastPostedAt) {
+    return 0;
+  }
+
+  const lastPostDate = new Date(lastPostedAt);
+  if (Number.isNaN(lastPostDate.getTime())) {
+    return 0;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  lastPostDate.setHours(0, 0, 0, 0);
+
+  return Math.max(0, Math.floor((today.getTime() - lastPostDate.getTime()) / 86400000));
+}
+
+function getLatestPostedAt(records: WorkoutRecord[]) {
+  return records.reduce<string | undefined>((latest, record) => (
+    !latest || new Date(record.created_at) > new Date(latest) ? record.created_at : latest
+  ), undefined);
 }
 
 function Stat({ value, label }: { value: string; label: string }) {
