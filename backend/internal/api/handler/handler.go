@@ -82,6 +82,29 @@ func (h *Handler) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"token": token, "user": user})
 }
 
+// Signup は新規ユーザー登録を行います
+func (h *Handler) Signup(c *gin.Context) {
+	var req struct {
+		Name     string `json:"name"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	user, err := h.service.Register(req.Name, req.Email, req.Password)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// hide password hash
+	user.PasswordHash = ""
+	c.JSON(http.StatusCreated, user)
+}
+
 // Me はJWTの内容から現在のユーザーを返します
 func (h *Handler) Me(c *gin.Context) {
 	authHeader := c.GetHeader("Authorization")

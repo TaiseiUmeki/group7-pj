@@ -63,6 +63,38 @@ func (s *Service) Login(email, password string) (*model.User, string, error) {
 	return user, token, nil
 }
 
+// Register は新しいユーザーを作成します（サインアップ）
+func (s *Service) Register(name, email, password string) (*model.User, error) {
+	normalizedEmail := strings.TrimSpace(strings.ToLower(email))
+	if normalizedEmail == "" || password == "" || strings.TrimSpace(name) == "" {
+		return nil, fmt.Errorf("name, email and password are required")
+	}
+
+	// 既に存在するか確認
+	if _, err := s.repo.GetUserByEmail(normalizedEmail); err == nil {
+		return nil, fmt.Errorf("email already in use")
+	} else if err != nil && !errors.Is(err, repository.ErrUserNotFound) {
+		return nil, err
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+
+	user := &model.User{
+		Name:         strings.TrimSpace(name),
+		Email:        normalizedEmail,
+		PasswordHash: string(hash),
+	}
+
+	if err := s.repo.CreateUser(user); err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
 // GetCurrentUser はJWTから現在のユーザーを取得します。
 func (s *Service) GetCurrentUser(tokenString string) (*model.User, error) {
 	claims := &authClaims{}

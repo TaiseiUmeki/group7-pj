@@ -175,6 +175,7 @@ func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.POST("/api/auth/login", h.Login)
+	r.POST("/api/auth/signup", h.Signup)
 	r.GET("/api/auth/me", h.Me)
 	r.POST("/api/workout-records", h.CreateWorkoutRecord)
 	r.PUT("/api/workout-records/:id", h.UpdateWorkoutRecord)
@@ -248,6 +249,41 @@ func TestLoginFailure(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status 401, got %d", w.Code)
+	}
+}
+
+func TestSignupSuccess(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+
+	body := bytes.NewBufferString(`{"name":"New User","email":"new@example.com","password":"secret"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/signup", body)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d", w.Code)
+	}
+
+	var u model.User
+	if err := json.NewDecoder(w.Body).Decode(&u); err != nil {
+		t.Fatalf("failed to decode signup response: %v", err)
+	}
+	if u.Email != "new@example.com" {
+		t.Fatalf("expected email new@example.com, got %s", u.Email)
+	}
+}
+
+func TestSignupDuplicateEmail(t *testing.T) {
+	router, seedUser, _ := newTestRouter(t)
+
+	// try to signup with same email as seedUser
+	body := bytes.NewBufferString(`{"name":"Dup","email":"` + seedUser.Email + `","password":"secret"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/signup", body)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for duplicate email, got %d", w.Code)
 	}
 }
 

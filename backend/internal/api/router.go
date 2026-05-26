@@ -30,6 +30,7 @@ func NewRouter(db *gorm.DB, jwtSecret string) http.Handler {
 	r.GET("/health", h.HealthCheck)
 
 	r.POST("/api/auth/login", h.Login)
+	r.POST("/api/auth/signup", h.Signup)
 	r.GET("/api/auth/me", h.Me)
 
 	r.GET("/api/users", h.GetAllUsers)
