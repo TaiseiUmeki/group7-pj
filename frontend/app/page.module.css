@@ -306,101 +306,147 @@
 .quickScreen {
   width: min(100%, 650px);
   margin: 0 auto;
-  padding: 40px clamp(18px, 4vw, 32px) 32px;
+  min-height: calc(100vh - 102px);
+  padding: clamp(38px, 9vh, 70px) clamp(18px, 5vw, 42px) 36px;
+  display: flex;
+  flex-direction: column;
 }
 
-.simpleHeader {
-  margin-bottom: 28px;
-}
-
-.simpleHeader h1 {
-  margin: 0 0 6px;
-  font-size: 27px;
-}
-
-.simpleHeader p {
-  margin: 0;
-  color: #6a778c;
-}
-
-.startPanel {
-  padding: 30px 24px;
-  border-radius: 22px;
-  background: #fff;
-  border: 1px solid #e3e8f1;
+.workoutHeader {
+  margin-bottom: clamp(42px, 10vh, 76px);
   text-align: center;
 }
 
-.lightning {
-  width: 64px;
-  height: 64px;
-  display: grid;
-  place-items: center;
-  margin: 0 auto 17px;
-  border-radius: 50%;
-  color: #fff;
-  background: linear-gradient(145deg, #68a2ff, #326cf0);
+.workoutHeader p {
+  margin: 0 0 10px;
+  color: #3775f2;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
 }
 
-.lightning svg {
-  width: 33px;
-  height: 33px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linejoin: round;
-}
-
-.startPanel h2 {
+.workoutHeader h1 {
   margin: 0;
-  font-size: 21px;
+  font-size: 24px;
+  font-weight: 700;
 }
 
-.startPanel p {
-  margin: 11px 0 25px;
-  color: #627087;
+.timerPanel {
+  text-align: center;
+}
+
+.timerState {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 22px;
+  padding: 8px 18px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.timerState span {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.running {
+  color: #1e8d51;
+  background: #e1f8e9;
+}
+
+.running span {
+  background: #28ae62;
+  box-shadow: 0 0 0 5px rgba(40, 174, 98, 0.14);
+}
+
+.paused {
+  color: #b36314;
+  background: #fff0dc;
+}
+
+.paused span {
+  background: #e49131;
+}
+
+.timerClock {
+  display: block;
+  color: #17243c;
+  font-size: clamp(56px, 15vw, 82px);
+  line-height: 1;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.timerDescription {
+  margin: 22px 0 0;
+  color: #6e7c91;
   font-size: 14px;
 }
 
-.startButton {
-  width: 100%;
-  min-height: 52px;
-  border-radius: 28px;
-  background: linear-gradient(115deg, #65a1ff, #326cf0);
-  color: #fff;
-  font-size: 15px;
+.workoutActions {
+  display: grid;
+  gap: 14px;
+  margin-top: auto;
+}
+
+.workoutActions button {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border-radius: 30px;
+  font-size: 16px;
   font-weight: 700;
   cursor: pointer;
 }
 
-.routineTitle {
-  margin: 32px 0 16px;
-  font-size: 18px;
+.workoutActions button:disabled {
+  opacity: 0.65;
+  cursor: wait;
 }
 
-.routines {
-  display: grid;
-  gap: 12px;
+.workoutActions svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.routines button {
-  padding: 16px 18px;
-  border: 1px solid #e5eaf1;
-  border-radius: 14px;
+.pauseButton {
+  border: 1px solid #d9e0eb;
   background: #fff;
-  text-align: left;
-  cursor: pointer;
+  color: #293950;
 }
 
-.routines strong {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 16px;
+.finishButton {
+  background: #ee4e48;
+  color: #fff;
+  box-shadow: 0 5px 14px rgba(238, 78, 72, 0.2);
 }
 
-.routines span {
-  color: #69758a;
-  font-size: 13px;
+.workoutError {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fee9e7;
+  color: #bd352d;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.finishNote {
+  margin: 18px 0 0;
+  color: #748095;
+  font-size: 12px;
+  text-align: center;
 }
 
 .nav {

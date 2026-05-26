@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import styles from "./page.module.css";
 
 type TimelineTab = "recommended" | "following";
@@ -25,11 +25,21 @@ type Profile = {
 };
 
 type TimelinePost = {
-  id: number;
+  id: number | string;
   author: Profile;
   message: string;
   postedAt: string;
   likes: number;
+};
+
+type WorkoutSession = {
+  startedAt: number;
+  activeSince: number | null;
+  elapsedBeforePause: number;
+};
+
+type WorkoutRecordResponse = {
+  id: number;
 };
 
 const myProfile: Profile = {
@@ -114,6 +124,10 @@ export default function Home() {
   const [view, setView] = useState<View>("timeline");
   const [activeTab, setActiveTab] = useState<TimelineTab>("recommended");
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
+  const [workoutSession, setWorkoutSession] = useState<WorkoutSession | null>(null);
+  const [completedPosts, setCompletedPosts] = useState<TimelinePost[]>([]);
+  const [postingWorkout, setPostingWorkout] = useState(false);
+  const [workoutError, setWorkoutError] = useState("");
 
   const openTimeline = () => {
     setSelectedProfile(null);
@@ -125,6 +139,95 @@ export default function Home() {
     setView("member");
   };
 
+  const startWorkout = () => {
+    setWorkoutError("");
+    setWorkoutSession((session) => session ?? {
+      startedAt: Date.now(),
+      activeSince: Date.now(),
+      elapsedBeforePause: 0,
+    });
+    setView("quickStart");
+  };
+
+  const toggleWorkoutPause = () => {
+    setWorkoutSession((session) => {
+      if (!session) {
+        return null;
+      }
+
+      if (session.activeSince === null) {
+        return { ...session, activeSince: Date.now() };
+      }
+
+      return {
+        ...session,
+        activeSince: null,
+        elapsedBeforePause: getWorkoutElapsed(session),
+      };
+    });
+  };
+
+  const finishWorkout = async () => {
+    if (!workoutSession || postingWorkout) {
+      return;
+    }
+
+    const elapsedMs = getWorkoutElapsed(workoutSession);
+    const durationMinutes = Math.max(1, Math.ceil(elapsedMs / 60000));
+    setWorkoutSession({
+      ...workoutSession,
+      activeSince: null,
+      elapsedBeforePause: elapsedMs,
+    });
+
+    const token = window.localStorage.getItem("group7pj_token");
+
+    if (!token) {
+      setWorkoutError("ログイン情報を確認できません。もう一度ログインしてください。");
+      return;
+    }
+
+    setPostingWorkout(true);
+    setWorkoutError("");
+
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+      const response = await fetch(`${apiUrl}/api/workout-records`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          record_type: "quick",
+          start_time: new Date(workoutSession.startedAt).toISOString(),
+          duration_minutes: durationMinutes,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as WorkoutRecordResponse | { error?: string } | null;
+      if (!response.ok || !payload || !("id" in payload)) {
+        const message = payload && "error" in payload ? payload.error : undefined;
+        throw new Error(message || "トレーニング記録を保存できませんでした。");
+      }
+
+      setCompletedPosts((posts) => [{
+        id: `workout-${payload.id}`,
+        author: myProfile,
+        message: `トレーニング完了！ ${formatWorkoutDuration(elapsedMs)}取り組みました。`,
+        postedAt: "たった今",
+        likes: 0,
+      }, ...posts]);
+      setWorkoutSession(null);
+      setActiveTab("following");
+      openTimeline();
+    } catch (error) {
+      setWorkoutError(error instanceof Error ? error.message : "トレーニング記録を保存できませんでした。");
+    } finally {
+      setPostingWorkout(false);
+    }
+  };
+
   return (
     <main className={styles.app}>
       <section className={styles.viewport}>
@@ -133,9 +236,18 @@ export default function Home() {
             activeTab={activeTab}
             onSelectTab={setActiveTab}
             onOpenProfile={openMemberProfile}
+            completedPosts={completedPosts}
           />
         )}
-        {view === "quickStart" && <QuickStartScreen />}
+        {view === "quickStart" && workoutSession && (
+          <QuickStartScreen
+            session={workoutSession}
+            errorMessage={workoutError}
+            posting={postingWorkout}
+            onTogglePause={toggleWorkoutPause}
+            onFinish={finishWorkout}
+          />
+        )}
         {view === "profile" && <ProfileScreen profile={myProfile} own />}
         {view === "member" && selectedProfile && (
           <ProfileScreen profile={selectedProfile} onBack={openTimeline} />
@@ -144,7 +256,7 @@ export default function Home() {
         <BottomNav
           activeView={view}
           onTimeline={openTimeline}
-          onQuickStart={() => setView("quickStart")}
+          onQuickStart={startWorkout}
           onProfile={() => setView("profile")}
         />
         <button className={styles.help} type="button" aria-label="ヘルプを開く">
@@ -159,12 +271,14 @@ function TimelineScreen({
   activeTab,
   onSelectTab,
   onOpenProfile,
+  completedPosts,
 }: {
   activeTab: TimelineTab;
   onSelectTab: (tab: TimelineTab) => void;
   onOpenProfile: (profile: Profile) => void;
+  completedPosts: TimelinePost[];
 }) {
-  const posts = activeTab === "recommended" ? recommendedPosts : followingPosts;
+  const posts = activeTab === "recommended" ? recommendedPosts : [...completedPosts, ...followingPosts];
 
   return (
     <>
@@ -271,26 +385,93 @@ function ProfileScreen({
   );
 }
 
-function QuickStartScreen() {
+function QuickStartScreen({
+  session,
+  errorMessage,
+  posting,
+  onTogglePause,
+  onFinish,
+}: {
+  session: WorkoutSession;
+  errorMessage: string;
+  posting: boolean;
+  onTogglePause: () => void;
+  onFinish: () => void;
+}) {
+  const [, refreshClock] = useState(0);
+  const running = session.activeSince !== null;
+  const elapsedMs = getWorkoutElapsed(session);
+
+  useEffect(() => {
+    if (!running) {
+      return;
+    }
+
+    const intervalID = window.setInterval(() => {
+      refreshClock((ticks) => ticks + 1);
+    }, 250);
+
+    return () => window.clearInterval(intervalID);
+  }, [running]);
+
   return (
     <section className={styles.quickScreen}>
-      <header className={styles.simpleHeader}>
-        <h1>クイックスタート</h1>
-        <p>今日のトレーニングを記録</p>
+      <header className={styles.workoutHeader}>
+        <p>QUICK START</p>
+        <h1>トレーニング中</h1>
       </header>
-      <div className={styles.startPanel}>
-        <span className={styles.lightning}><BoltIcon /></span>
-        <h2>新しいワークアウト</h2>
-        <p>種目を選んですぐに記録を開始できます。</p>
-        <button className={styles.startButton} type="button">トレーニングを開始</button>
+      <div className={styles.timerPanel}>
+        <p className={`${styles.timerState} ${running ? styles.running : styles.paused}`}>
+          <span />
+          {running ? "計測中" : "一時停止中"}
+        </p>
+        <time className={styles.timerClock}>{formatStopwatch(elapsedMs)}</time>
+        <p className={styles.timerDescription}>
+          {running ? "トレーニング時間を記録しています" : "再開すると計測を続けます"}
+        </p>
       </div>
-      <h2 className={styles.routineTitle}>おすすめメニュー</h2>
-      <div className={styles.routines}>
-        <button type="button"><strong>胸・肩</strong><span>ベンチプレス / ショルダープレス</span></button>
-        <button type="button"><strong>脚</strong><span>スクワット / レッグプレス</span></button>
+      <div className={styles.workoutActions}>
+        <button className={styles.pauseButton} onClick={onTogglePause} type="button" disabled={posting}>
+          {running ? <PauseIcon /> : <PlayIcon />}
+          {running ? "一時停止" : "再開"}
+        </button>
+        <button className={styles.finishButton} onClick={onFinish} type="button" disabled={posting}>
+          <StopIcon />
+          {posting ? "投稿中..." : "トレーニング終了"}
+        </button>
       </div>
+      {errorMessage ? <p className={styles.workoutError} role="alert">{errorMessage}</p> : null}
+      <p className={styles.finishNote}>終了すると計測結果を投稿し、タイムラインへ戻ります。</p>
     </section>
   );
+}
+
+function getWorkoutElapsed(session: WorkoutSession) {
+  if (session.activeSince === null) {
+    return session.elapsedBeforePause;
+  }
+
+  return session.elapsedBeforePause + Date.now() - session.activeSince;
+}
+
+function formatStopwatch(elapsedMs: number) {
+  const totalSeconds = Math.floor(elapsedMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  return [hours, minutes, seconds].map((unit) => unit.toString().padStart(2, "0")).join(":");
+}
+
+function formatWorkoutDuration(elapsedMs: number) {
+  const totalSeconds = Math.max(1, Math.floor(elapsedMs / 1000));
+  if (totalSeconds < 60) {
+    return `${totalSeconds}秒`;
+  }
+
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return seconds ? `${minutes}分${seconds}秒` : `${minutes}分`;
 }
 
 function Stat({ value, label }: { value: string; label: string }) {
@@ -358,6 +539,30 @@ function BoltIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="m13.2 2.5-8 11h6.1l-.6 8 8.1-11h-6.1z" />
+    </svg>
+  );
+}
+
+function PauseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7.5 5.5v13M16.5 5.5v13" />
+    </svg>
+  );
+}
+
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m8 5.5 11 6.5-11 6.5z" />
+    </svg>
+  );
+}
+
+function StopIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="6.5" y="6.5" width="11" height="11" rx="1" />
     </svg>
   );
 }
