@@ -32,6 +32,9 @@ type Repository interface {
 	CreateWorkoutRecord(record *model.WorkoutRecord) error
 	UpdateWorkoutRecord(record *model.WorkoutRecord) error
 	DeleteWorkoutRecord(id int) error
+
+	// TrainingPost関連
+	CreateTrainingPost(post *model.TrainingPost) error
 }
 
 // MySQLRepository はMySQL用のRepository実装です
@@ -172,6 +175,11 @@ func (r *MySQLRepository) UpdateWorkoutRecord(record *model.WorkoutRecord) error
 func (r *MySQLRepository) DeleteWorkoutRecord(id int) error {
 	now := time.Now()
 	return r.db.Model(&model.TrainingPost{}).Where("id = ?", id).Update("deleted_at", now).Error
+}
+
+// CreateTrainingPost はトレーニング報告投稿を作成します
+func (r *MySQLRepository) CreateTrainingPost(post *model.TrainingPost) error {
+	return r.db.Create(post).Error
 }
 
 func trainingPostFromWorkoutRecord(record *model.WorkoutRecord) *model.TrainingPost {
