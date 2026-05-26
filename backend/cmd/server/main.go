@@ -31,7 +31,7 @@ func main() {
 	}
 
 	// マイグレーション実行
-	if err := db.AutoMigrate(&model.User{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.WorkoutRecord{}); err != nil {
 		log.Fatalf("Failed to run migration: %v", err)
 	}
 	fmt.Println("Database migration completed")
