@@ -35,6 +35,7 @@ RUN apk add --no-cache \
 
 # ビルドしたバイナリをコピー
 COPY --from=builder /app/main .
+COPY --from=builder /app/migrations ./migrations
 
 # ログディレクトリ
 RUN mkdir -p /app/logs
