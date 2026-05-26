@@ -582,6 +582,71 @@
   text-align: center;
 }
 
+.profilePreferences {
+  margin: 0 auto 25px;
+  text-align: center;
+}
+
+.profileTags {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 15px;
+}
+
+.profileTags span {
+  padding: 6px 11px;
+  border-radius: 16px;
+  background: #e9f0ff;
+  color: #316cf0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.inactiveStatus {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 9px 13px;
+  border-radius: 10px;
+  background: #fee9e7;
+  color: #bd352d;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.socialStats {
+  width: min(100%, 310px);
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  margin: 0 auto 22px;
+}
+
+.socialStats button {
+  display: grid;
+  gap: 5px;
+  padding: 5px 14px;
+  border-right: 1px solid #e5eaf1;
+  background: transparent;
+  cursor: pointer;
+}
+
+.socialStats button:last-child {
+  border: 0;
+}
+
+.socialStats strong {
+  color: #17243c;
+  font-size: 21px;
+}
+
+.socialStats span {
+  color: #667488;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -590,6 +655,56 @@
   background: #fff;
   border: 1px solid #e5eaf1;
   border-radius: 16px;
+}
+
+.badges {
+  margin-bottom: 34px;
+}
+
+.badgeGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.badgeCard {
+  min-height: 146px;
+  padding: 14px 12px;
+  border: 1px solid #e6ebf2;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.badgeMark {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 10px;
+  border-radius: 50%;
+  font-size: 16px;
+}
+
+.gold {
+  background: #fff1ce;
+  color: #cf8b00;
+}
+
+.badgeCard strong {
+  display: block;
+  font-size: 14px;
+}
+
+.badgeCard p {
+  margin: 5px 0 8px;
+  color: #58677d;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.badgeCard small {
+  color: #8792a4;
+  font-size: 11px;
 }
 
 .stat {
@@ -679,6 +794,124 @@
   margin: 7px 0 0;
   color: #566277;
   font-size: 14px;
+}
+
+.profileEditor {
+  width: min(calc(100% - 36px), 530px);
+  margin: 28px auto;
+  padding: 26px 28px 30px;
+  border: 1px solid #e5eaf1;
+  border-radius: 20px;
+  background: #fff;
+}
+
+.profileEditor .largeAvatar {
+  margin-bottom: 28px;
+}
+
+.daysField {
+  position: relative;
+}
+
+.daysField input {
+  padding-right: 196px;
+}
+
+.daysField > span {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  color: #69768a;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tagSelector {
+  margin: 0 0 25px;
+  padding: 0;
+  border: 0;
+}
+
+.tagSelector legend {
+  margin-bottom: 12px;
+  color: #25344d;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.tagSelector > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.tagSelector button {
+  padding: 9px 13px;
+  border: 1px solid #dce3ed;
+  border-radius: 20px;
+  background: #fff;
+  color: #647287;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tagSelector .selectedTag {
+  border-color: #316cf0;
+  background: #e9f0ff;
+  color: #316cf0;
+}
+
+.connections {
+  width: min(calc(100% - 36px), 570px);
+  margin: 24px auto;
+  padding: 0 0 12px;
+}
+
+.connectionCount {
+  margin: 0 0 13px;
+  color: #647287;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.connection {
+  display: grid;
+  grid-template-columns: 52px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 10px;
+  padding: 15px 16px;
+  border: 1px solid #e5eaf1;
+  border-radius: 15px;
+  background: #fff;
+}
+
+.connection .avatar {
+  width: 48px;
+  height: 48px;
+  cursor: default;
+}
+
+.connection strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 15px;
+}
+
+.connection div:nth-child(2) span {
+  color: #738095;
+  font-size: 13px;
+}
+
+.connection small {
+  padding: 7px 10px;
+  border-radius: 15px;
+  background: #e9f0ff;
+  color: #316cf0;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .quickScreen {
@@ -1030,6 +1263,39 @@
 
   .profileBody {
     padding-top: 25px;
+  }
+
+  .badgeGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .badgeCard {
+    min-height: 0;
+  }
+
+  .profileEditor {
+    margin-top: 17px;
+    padding: 22px 18px 25px;
+  }
+
+  .daysField input {
+    padding-right: 14px;
+  }
+
+  .daysField > span {
+    position: static;
+    display: block;
+    margin-top: 8px;
+    transform: none;
+  }
+
+  .connection {
+    grid-template-columns: 46px 1fr;
+    padding: 13px 12px;
+  }
+
+  .connection small {
+    grid-column: 2;
   }
 
   .nav {
