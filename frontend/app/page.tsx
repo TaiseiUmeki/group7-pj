@@ -1,7 +1,8 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import styles from "./page.module.css";
 
 type TimelineTab = "recommended" | "following";
@@ -47,6 +48,17 @@ type WorkoutSession = {
 
 type WorkoutRecordResponse = {
   id: number;
+};
+
+type WorkoutRecord = {
+  id: number;
+  user_id: number;
+  record_type: "quick" | "normal" | string;
+  exercise_type: string;
+  start_time: string;
+  duration_minutes: number;
+  created_at: string;
+  updated_at: string;
 };
 
 type DetailedWorkoutInput = {
@@ -167,10 +179,58 @@ export default function Home() {
   const [likedPostIDs, setLikedPostIDs] = useState<Array<TimelinePost["id"]>>([]);
   const [workoutSession, setWorkoutSession] = useState<WorkoutSession | null>(null);
   const [completedPosts, setCompletedPosts] = useState<TimelinePost[]>([]);
+  const [workoutRecords, setWorkoutRecords] = useState<WorkoutRecord[]>([]);
+  const [loadingWorkoutRecords, setLoadingWorkoutRecords] = useState(false);
+  const [workoutRecordsError, setWorkoutRecordsError] = useState("");
   const [postingWorkout, setPostingWorkout] = useState(false);
   const [workoutError, setWorkoutError] = useState("");
   const [postingDetailedWorkout, setPostingDetailedWorkout] = useState(false);
   const [detailedWorkoutError, setDetailedWorkoutError] = useState("");
+
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+  const loadWorkoutRecords = useCallback(async () => {
+    const token = window.localStorage.getItem("group7pj_token");
+
+    if (!token) {
+      setWorkoutRecords([]);
+      setWorkoutRecordsError("");
+      return;
+    }
+
+    setLoadingWorkoutRecords(true);
+    setWorkoutRecordsError("");
+
+    try {
+      const response = await fetch(`${apiUrl}/api/workout-records`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const payload = (await response.json().catch(() => null)) as WorkoutRecord[] | { error?: string } | null;
+      if (!response.ok || !Array.isArray(payload)) {
+        const message = payload && !Array.isArray(payload) && "error" in payload ? payload.error : undefined;
+        throw new Error(message || "トレーニング記録を読み込めませんでした。");
+      }
+
+      setWorkoutRecords(payload);
+    } catch (error) {
+      setWorkoutRecordsError(error instanceof Error ? error.message : "トレーニング記録を読み込めませんでした。");
+    } finally {
+      setLoadingWorkoutRecords(false);
+    }
+  }, [apiUrl]);
+
+  useEffect(() => {
+    void loadWorkoutRecords();
+  }, [loadWorkoutRecords]);
+
+  const ownProfile = {
+    ...myProfile,
+    records: loadingWorkoutRecords ? "..." : String(workoutRecords.length),
+    logs: workoutRecords.length > 0 ? workoutRecords.map(formatWorkoutLog).slice(0, 3) : [],
+  };
 
   const openTimeline = () => {
     setSelectedProfile(null);
@@ -285,6 +345,7 @@ export default function Home() {
         likes: 0,
       }, ...posts]);
       setWorkoutSession(null);
+      await loadWorkoutRecords();
       setActiveTab("following");
       openTimeline();
     } catch (error) {
@@ -344,6 +405,7 @@ export default function Home() {
         postedAt: "たった今",
         likes: 0,
       }, ...posts]);
+      await loadWorkoutRecords();
       setActiveTab("following");
       openTimeline();
     } catch (error) {
@@ -394,7 +456,7 @@ export default function Home() {
             onSubmit={createDetailedWorkout}
           />
         )}
-        {view === "profile" && <ProfileScreen profile={myProfile} own />}
+        {view === "profile" && <ProfileScreen profile={ownProfile} own recordErrorMessage={workoutRecordsError} />}
         {view === "member" && selectedProfile && (
           <ProfileScreen profile={selectedProfile} onBack={openTimeline} />
         )}
@@ -586,10 +648,12 @@ function ProfileScreen({
   profile,
   own = false,
   onBack,
+  recordErrorMessage,
 }: {
   profile: Profile;
   own?: boolean;
   onBack?: () => void;
+  recordErrorMessage?: string;
 }) {
   return (
     <section className={styles.profileScreen}>
@@ -623,14 +687,19 @@ function ProfileScreen({
           <h3>トレーニングログ</h3>
           <span>最近の記録</span>
         </div>
+        {recordErrorMessage ? <p className={styles.profileNotice}>{recordErrorMessage}</p> : null}
         <div className={styles.logs}>
-          {profile.logs.map((log) => (
-            <article className={styles.log} key={`${log.date}-${log.exercise}`}>
-              <time>{log.date}</time>
-              <strong>{log.exercise}</strong>
-              <p>{log.detail}</p>
-            </article>
-          ))}
+          {profile.logs.length > 0 ? (
+            profile.logs.map((log) => (
+              <article className={styles.log} key={`${log.date}-${log.exercise}`}>
+                <time>{log.date}</time>
+                <strong>{log.exercise}</strong>
+                <p>{log.detail}</p>
+              </article>
+            ))
+          ) : (
+            <p className={styles.emptyState}>まだトレーニング記録がありません。</p>
+          )}
         </div>
       </div>
     </section>
@@ -875,6 +944,28 @@ function formatWorkoutPeriod(startTime: string, durationMinutes: number) {
   });
 
   return `${dateFormatter.format(start)} - ${timeFormatter.format(end)}`;
+}
+
+function formatWorkoutLog(record: WorkoutRecord): TrainingLog {
+  const start = new Date(record.start_time);
+  const date = new Intl.DateTimeFormat("ja-JP", {
+    month: "numeric",
+    day: "numeric",
+  }).format(start);
+
+  const exercise = record.record_type === "quick"
+    ? "クイックスタート"
+    : record.exercise_type || "トレーニング記録";
+
+  const detail = record.record_type === "quick"
+    ? `${record.duration_minutes}分のクイック記録`
+    : `${record.exercise_type || "詳細未設定"} / ${record.duration_minutes}分`;
+
+  return {
+    date,
+    exercise,
+    detail,
+  };
 }
 
 function Stat({ value, label }: { value: string; label: string }) {

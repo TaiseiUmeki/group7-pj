@@ -637,6 +637,25 @@
   gap: 12px;
 }
 
+.profileNotice {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f3f6fb;
+  color: #5a6577;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.emptyState {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #7a8698;
+  font-size: 14px;
+}
+
 .log {
   padding: 16px 18px;
   border: 1px solid #e6ebf2;
