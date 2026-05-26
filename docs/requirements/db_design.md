@@ -12,7 +12,7 @@
 - フォロー、TL表示、いいね
 - 自分とフォロー先のログ表示
 - 推薦ユーザー表示
-- サボり判定と応援通知
+- プロフィールに設定したトレーニング頻度に基づくサボり判定と応援通知
 
 ### 1.1 命名規則
 
@@ -21,7 +21,9 @@
 - 主キーは各テーブル共通で `id` とする。
 - 外部キーは参照先テーブルの単数形に `_id` を付ける。例: `user_id`
 - 真偽値は `is_`、`has_`、`did_` で始める。例: `is_read`、`did_train`
-- ステータスや種別は `varchar` または `enum` 相当の文字列で管理し、アプリケーション側で許容値を制御する。
+- ステータスや種別は `int` のIDとして管理し、IDに対応する表示値はバックエンドで変換する。
+  - 例: `profiles.focus_type = 1` を「大会勢」として扱う。
+  - 例: `training_sessions.status = 1` を「進行中」として扱う。
 
 ### 1.2 共通カラム
 
@@ -64,8 +66,8 @@ erDiagram
     USERS ||--o{ POST_LIKES : likes
     USERS ||--o{ RECOMMENDATION_SLOTS : receives
     USERS ||--o{ RECOMMENDATION_SLOTS : recommended_as
-    USERS ||--o{ SUPPORT_MESSAGES : sends
-    USERS ||--o{ SUPPORT_MESSAGES : receives
+    USERS ||--o{ SUPPORT_MESSAGES : sends_support
+    USERS ||--o{ SUPPORT_MESSAGES : receives_support
     USERS ||--o{ NOTIFICATIONS : receives
     USERS ||--o{ USER_BADGES : earns
 
@@ -73,7 +75,6 @@ erDiagram
     TRAINING_POSTS ||--o{ POST_LIKES : receives
     TRAINING_POSTS ||--o{ NOTIFICATIONS : references
 
-    BOT_TEMPLATES ||--o{ SUPPORT_MESSAGES : used_by
     SUPPORT_MESSAGES ||--o{ NOTIFICATIONS : creates
 
     BADGES ||--o{ USER_BADGES : awarded_as
@@ -92,8 +93,8 @@ erDiagram
         bigint user_id FK
         varchar username
         text bio
-        varchar focus_type
-        int slack_days_threshold
+        int focus_type
+        int training_frequency_days
         datetime created_at
         datetime updated_at
         datetime deleted_at
@@ -104,7 +105,7 @@ erDiagram
         bigint user_id FK
         datetime started_at
         datetime ended_at
-        varchar status
+        int status
         datetime created_at
         datetime updated_at
     }
@@ -117,7 +118,7 @@ erDiagram
         date trained_on
         datetime started_at
         datetime ended_at
-        varchar exercise_type
+        int exercise_type
         int duration_minutes
         text note
         varchar visibility
@@ -146,16 +147,7 @@ erDiagram
         bigint recommended_user_id FK
         date slot_date
         int display_order
-        varchar status
-        datetime created_at
-        datetime updated_at
-    }
-
-    BOT_TEMPLATES {
-        bigint id PK
-        varchar bot_type
-        text message_template
-        boolean is_active
+        int status
         datetime created_at
         datetime updated_at
     }
@@ -164,15 +156,13 @@ erDiagram
         bigint id PK
         bigint sender_user_id FK
         bigint receiver_user_id FK
-        bigint bot_template_id FK
-        text message
         datetime created_at
     }
 
     NOTIFICATIONS {
         bigint id PK
         bigint user_id FK
-        varchar notification_type
+        int notification_type
         bigint training_post_id FK
         bigint support_message_id FK
         text body
@@ -223,19 +213,19 @@ erDiagram
 
 ### 3.2 profiles
 
-ユーザーの表示情報、推薦条件、サボり判定条件を管理する。
+ユーザーの表示情報、推薦条件、トレーニング頻度を管理する。
 
-| カラム名             | 型          | NULL | PK  | FK       | デフォルト        | 説明                                                |
-| -------------------- | ----------- | ---- | --- | -------- | ----------------- | --------------------------------------------------- |
-| id                   | bigint      | NO   | YES |          | auto increment    | プロフィールID                                      |
-| user_id              | bigint      | NO   |     | users.id |                   | ユーザーID                                          |
-| username             | varchar(80) | NO   |     |          |                   | 表示名                                              |
-| bio                  | text        | YES  |     |          | NULL              | 自己紹介                                            |
-| focus_type           | int         | YES  |     |          | NULL              | 重視項目。例: motivation, competition, health, diet |
-| slack_days_threshold | int         | NO   |     |          | 3                 | サボり判定日数                                      |
-| created_at           | datetime    | NO   |     |          | current timestamp | 作成日時                                            |
-| updated_at           | datetime    | NO   |     |          | current timestamp | 更新日時                                            |
-| deleted_at           | datetime    | YES  |     |          | NULL              | 論理削除日時                                        |
+| カラム名                | 型          | NULL | PK  | FK       | デフォルト        | 説明                                                     |
+| ----------------------- | ----------- | ---- | --- | -------- | ----------------- | -------------------------------------------------------- |
+| id                      | bigint      | NO   | YES |          | auto increment    | プロフィールID                                           |
+| user_id                 | bigint      | NO   |     | users.id |                   | ユーザーID                                               |
+| username                | varchar(80) | NO   |     |          |                   | 表示名                                                   |
+| bio                     | text        | YES  |     |          | NULL              | 自己紹介                                                 |
+| focus_type              | int         | YES  |     |          | NULL              | 重視項目ID。例: 1=大会勢、2=健康維持、3=ダイエットなど |
+| training_frequency_days | int         | NO   |     |          | 3                 | 何日ごとにトレーニングする想定か                         |
+| created_at              | datetime    | NO   |     |          | current timestamp | 作成日時                                                 |
+| updated_at              | datetime    | NO   |     |          | current timestamp | 更新日時                                                 |
+| deleted_at              | datetime    | YES  |     |          | NULL              | 論理削除日時                                             |
 
 #### インデックス
 
@@ -248,15 +238,15 @@ erDiagram
 
 クイックスタートによる開始・終了記録を管理する。
 
-| カラム名   | 型          | NULL | PK  | FK       | デフォルト        | 説明                        |
-| ---------- | ----------- | ---- | --- | -------- | ----------------- | --------------------------- |
-| id         | bigint      | NO   | YES |          | auto increment    | セッションID                |
-| user_id    | bigint      | NO   |     | users.id |                   | ユーザーID                  |
-| started_at | datetime    | NO   |     |          |                   | 開始日時                    |
-| ended_at   | datetime    | YES  |     |          | NULL              | 終了日時                    |
-| status     | varchar(30) | NO   |     |          | active            | active, completed, canceled |
-| created_at | datetime    | NO   |     |          | current timestamp | 作成日時                    |
-| updated_at | datetime    | NO   |     |          | current timestamp | 更新日時                    |
+| カラム名   | 型       | NULL | PK  | FK       | デフォルト        | 説明                                                     |
+| ---------- | -------- | ---- | --- | -------- | ----------------- | -------------------------------------------------------- |
+| id         | bigint   | NO   | YES |          | auto increment    | セッションID                                             |
+| user_id    | bigint   | NO   |     | users.id |                   | ユーザーID                                               |
+| started_at | datetime | NO   |     |          |                   | 開始日時                                                 |
+| ended_at   | datetime | YES  |     |          | NULL              | 終了日時                                                 |
+| status     | int      | NO   |     |          | 1                 | セッション状態ID。例: 1=進行中、2=完了、3=キャンセル |
+| created_at | datetime | NO   |     |          | current timestamp | 作成日時                                                 |
+| updated_at | datetime | NO   |     |          | current timestamp | 更新日時                                                 |
 
 #### インデックス
 
@@ -278,7 +268,7 @@ erDiagram
 | trained_on       | date         | NO   |     |                      |                           | トレーニング日                                    |
 | started_at       | datetime     | YES  |     |                      | NULL                      | 開始日時                                          |
 | ended_at         | datetime     | YES  |     |                      | NULL                      | 終了日時                                          |
-| exercise_type    | varchar(100) | YES  |     |                      | NULL                      | 種目、部位など                                    |
+| exercise_type    | int          | YES  |     |                      | NULL                      | 種目・部位ID。例: 1=胸、2=背中、3=脚など          |
 | duration_minutes | int          | YES  |     |                      | NULL                      | トレーニング時間                                  |
 | note             | text         | YES  |     |                      | NULL                      | 自由記述、感想                                    |
 | visibility       | varchar(30)  | NO   |     |                      | followers_and_recommended | followers, recommended, followers_and_recommended |
@@ -342,7 +332,7 @@ erDiagram
 | recommended_user_id | bigint      | NO   |     | users.id |                   | 推薦されるユーザーID      |
 | slot_date           | date        | NO   |     |          |                   | 推薦枠の日付              |
 | display_order       | int         | NO   |     |          | 0                 | 表示順                    |
-| status              | varchar(30) | NO   |     |          | active            | active, followed, expired |
+| status              | int         | NO   |     |          | 1                 | 推薦枠状態ID。例: 1=有効、2=フォロー済み、3=期限切れ |
 | created_at          | datetime    | NO   |     |          | current timestamp | 作成日時                  |
 | updated_at          | datetime    | NO   |     |          | current timestamp | 更新日時                  |
 
@@ -354,37 +344,19 @@ erDiagram
 | idx_recommendation_slots_user_date | user_id, slot_date                      | normal | 当日推薦枠取得     |
 | idx_recommendation_slots_status    | status                                  | normal | 入れ替え対象抽出   |
 
-### 3.8 bot_templates
+### 3.8 support_messages
 
-応援通知で利用するBOT文面テンプレートを管理する。
+サボり状態のユーザーに対して、フォロワーが「がんばれボタン」を押した記録を管理する。
+応援文面は持たず、受信者には応援通知のみを送る。
+サボり状態は、対象ユーザーの最新トレーニング実施日から `profiles.training_frequency_days` を超えてトレーニングがない状態として判定する。
+サボり状態のユーザーがいる場合、そのフォロワーにモーダルを表示し、フォロワーが「がんばれボタン」を押すと本テーブルに記録し、`notifications` に応援通知を作成する。
 
-| カラム名         | 型          | NULL | PK  | FK  | デフォルト        | 説明                 |
-| ---------------- | ----------- | ---- | --- | --- | ----------------- | -------------------- |
-| id               | bigint      | NO   | YES |     | auto increment    | BOTテンプレートID    |
-| bot_type         | varchar(50) | NO   |     |     |                   | kyoto, positive など |
-| message_template | text        | NO   |     |     |                   | 応援文面テンプレート |
-| is_active        | boolean     | NO   |     |     | true              | 利用可否             |
-| created_at       | datetime    | NO   |     |     | current timestamp | 作成日時             |
-| updated_at       | datetime    | NO   |     |     | current timestamp | 更新日時             |
-
-#### インデックス
-
-| インデックス名                | カラム              | 種別   | 目的                      |
-| ----------------------------- | ------------------- | ------ | ------------------------- |
-| idx_bot_templates_type_active | bot_type, is_active | normal | BOT種別ごとの有効文面取得 |
-
-### 3.9 support_messages
-
-サボり状態のユーザーに送られた応援を管理する。
-
-| カラム名         | 型       | NULL | PK  | FK               | デフォルト        | 説明                     |
-| ---------------- | -------- | ---- | --- | ---------------- | ----------------- | ------------------------ |
-| id               | bigint   | NO   | YES |                  | auto increment    | 応援ID                   |
-| sender_user_id   | bigint   | NO   |     | users.id         |                   | 応援送信者ID             |
-| receiver_user_id | bigint   | NO   |     | users.id         |                   | 応援受信者ID             |
-| bot_template_id  | bigint   | YES  |     | bot_templates.id | NULL              | 利用したBOT文面ID        |
-| message          | text     | NO   |     |                  |                   | 実際に送信された応援文面 |
-| created_at       | datetime | NO   |     |                  | current timestamp | 作成日時                 |
+| カラム名         | 型       | NULL | PK  | FK       | デフォルト        | 説明         |
+| ---------------- | -------- | ---- | --- | -------- | ----------------- | ------------ |
+| id               | bigint   | NO   | YES |          | auto increment    | 応援ID       |
+| sender_user_id   | bigint   | NO   |     | users.id |                   | 応援送信者ID |
+| receiver_user_id | bigint   | NO   |     | users.id |                   | 応援受信者ID |
+| created_at       | datetime | NO   |     |          | current timestamp | 作成日時     |
 
 #### インデックス
 
@@ -393,21 +365,21 @@ erDiagram
 | idx_support_messages_receiver_created | receiver_user_id, created_at | normal | 受信した応援履歴取得 |
 | idx_support_messages_sender_created   | sender_user_id, created_at   | normal | 送信した応援履歴取得 |
 
-### 3.10 notifications
+### 3.9 notifications
 
 ユーザーへの通知を管理する。
 
-| カラム名           | 型          | NULL | PK  | FK                  | デフォルト        | 説明                      |
-| ------------------ | ----------- | ---- | --- | ------------------- | ----------------- | ------------------------- |
-| id                 | bigint      | NO   | YES |                     | auto increment    | 通知ID                    |
-| user_id            | bigint      | NO   |     | users.id            |                   | 通知受信ユーザーID        |
-| notification_type  | varchar(50) | NO   |     |                     |                   | like, support, slack など |
-| training_post_id   | bigint      | YES  |     | training_posts.id   | NULL              | 関連投稿ID                |
-| support_message_id | bigint      | YES  |     | support_messages.id | NULL              | 関連応援ID                |
-| body               | text        | NO   |     |                     |                   | 通知本文                  |
-| is_read            | boolean     | NO   |     |                     | false             | 既読状態                  |
-| created_at         | datetime    | NO   |     |                     | current timestamp | 作成日時                  |
-| read_at            | datetime    | YES  |     |                     | NULL              | 既読日時                  |
+| カラム名           | 型       | NULL | PK  | FK                  | デフォルト        | 説明                                      |
+| ------------------ | -------- | ---- | --- | ------------------- | ----------------- | ----------------------------------------- |
+| id                 | bigint   | NO   | YES |                     | auto increment    | 通知ID                                    |
+| user_id            | bigint   | NO   |     | users.id            |                   | 通知受信ユーザーID                        |
+| notification_type  | int      | NO   |     |                     |                   | 通知種別ID。例: 1=いいね、2=応援、3=サボり検知 |
+| training_post_id   | bigint   | YES  |     | training_posts.id   | NULL              | 関連投稿ID                                |
+| support_message_id | bigint   | YES  |     | support_messages.id | NULL              | 関連応援ID                                |
+| body               | text     | NO   |     |                     |                   | 通知本文                                  |
+| is_read            | boolean  | NO   |     |                     | false             | 既読状態                                  |
+| created_at         | datetime | NO   |     |                     | current timestamp | 作成日時                                  |
+| read_at            | datetime | YES  |     |                     | NULL              | 既読日時                                  |
 
 #### インデックス
 
@@ -416,7 +388,7 @@ erDiagram
 | idx_notifications_user_created | user_id, created_at | normal | 通知一覧取得 |
 | idx_notifications_user_read    | user_id, is_read    | normal | 未読通知取得 |
 
-### 3.11 badges
+### 3.10 badges
 
 バッジのマスタ情報を管理する。
 
@@ -437,7 +409,7 @@ erDiagram
 | -------------- | ------ | ------ | -------------------- |
 | uk_badges_code | code   | unique | バッジコード重複防止 |
 
-### 3.12 user_badges
+### 3.11 user_badges
 
 ユーザーが獲得したバッジを管理する。
 
@@ -471,7 +443,6 @@ erDiagram
 | users             | recommendation_slots | 1:N    | recommendation_slots.recommended_user_id | ユーザーは他ユーザーに推薦される         |
 | users             | support_messages     | 1:N    | support_messages.sender_user_id          | ユーザーは応援を送信できる               |
 | users             | support_messages     | 1:N    | support_messages.receiver_user_id        | ユーザーは応援を受信できる               |
-| bot_templates     | support_messages     | 1:N    | support_messages.bot_template_id         | 応援はBOT文面を利用できる                |
 | users             | notifications        | 1:N    | notifications.user_id                    | ユーザーは通知を複数受け取る             |
 | training_posts    | notifications        | 1:N    | notifications.training_post_id           | 投稿に関連する通知を作成できる           |
 | support_messages  | notifications        | 1:N    | notifications.support_message_id         | 応援に関連する通知を作成できる           |
@@ -483,14 +454,13 @@ erDiagram
 | #   | 内容                        | 依存                                          | 備考                                   |
 | --- | --------------------------- | --------------------------------------------- | -------------------------------------- |
 | 001 | `users` 作成                | なし                                          | 認証基盤                               |
-| 002 | `profiles` 作成             | `users`                                       | プロフィール、重視項目、サボり判定日数 |
+| 002 | `profiles` 作成             | `users`                                       | プロフィール、重視項目、トレーニング頻度 |
 | 003 | `training_sessions` 作成    | `users`                                       | クイックスタート                       |
 | 004 | `training_posts` 作成       | `users`, `training_sessions`                  | 事後報告、投稿詳細、ログ、カレンダー   |
 | 005 | `follows` 作成              | `users`                                       | フォロー、TL                           |
 | 006 | `post_likes` 作成           | `users`, `training_posts`                     | いいね                                 |
 | 007 | `recommendation_slots` 作成 | `users`                                       | 日替わり推薦ユーザー                   |
-| 008 | `bot_templates` 作成        | なし                                          | 応援BOT文面マスタ                      |
-| 009 | `support_messages` 作成     | `users`, `bot_templates`                      | 応援送信                               |
-| 010 | `notifications` 作成        | `users`, `training_posts`, `support_messages` | 通知一覧                               |
-| 011 | `badges` 作成               | なし                                          | バッジマスタ                           |
-| 012 | `user_badges` 作成          | `users`, `badges`                             | ユーザー獲得バッジ                     |
+| 008 | `support_messages` 作成     | `users`                                       | がんばれボタン押下記録                 |
+| 009 | `notifications` 作成        | `users`, `training_posts`, `support_messages` | 通知一覧                               |
+| 010 | `badges` 作成               | なし                                          | バッジマスタ                           |
+| 011 | `user_badges` 作成          | `users`, `badges`                             | ユーザー獲得バッジ                     |
