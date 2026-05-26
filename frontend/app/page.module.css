@@ -325,6 +325,165 @@
   color: #e34466;
 }
 
+.createRecordButton {
+  position: fixed;
+  right: clamp(20px, 4vw, 34px);
+  bottom: 112px;
+  z-index: 9;
+  min-height: 54px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px 0 16px;
+  border-radius: 28px;
+  background: #316cf0;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(49, 108, 240, 0.3);
+}
+
+.createRecordButton svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.createScreen {
+  min-height: calc(100vh - 102px);
+}
+
+.recordForm {
+  width: min(calc(100% - 36px), 620px);
+  margin: 26px auto;
+  padding: 28px 28px 30px;
+  border: 1px solid #e5eaf1;
+  border-radius: 20px;
+  background: #fff;
+}
+
+.formIntro {
+  margin-bottom: 28px;
+}
+
+.formIntro p {
+  margin: 0 0 8px;
+  color: #316cf0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.formIntro h2 {
+  margin: 0 0 10px;
+  color: #15233a;
+  font-size: 23px;
+}
+
+.formIntro span {
+  color: #647287;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.formField {
+  display: grid;
+  gap: 9px;
+  margin-bottom: 22px;
+  color: #25344d;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.formField small {
+  margin-left: 4px;
+  color: #7b8798;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.formField input,
+.formField select,
+.formField textarea {
+  width: 100%;
+  min-height: 50px;
+  padding: 0 14px;
+  border: 1px solid #dce3ed;
+  border-radius: 11px;
+  background: #fff;
+  color: #1b293e;
+  font: inherit;
+  font-weight: 500;
+}
+
+.formField select {
+  appearance: auto;
+}
+
+.formField textarea {
+  min-height: 118px;
+  padding: 14px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.formField input:focus,
+.formField select:focus,
+.formField textarea:focus {
+  outline: 2px solid rgba(49, 108, 240, 0.2);
+  border-color: #316cf0;
+}
+
+.formField select:disabled {
+  background: #f4f6f9;
+  color: #8894a7;
+}
+
+.durationField {
+  position: relative;
+}
+
+.durationField input {
+  padding-right: 46px;
+}
+
+.durationField span {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #68758a;
+  font-size: 14px;
+}
+
+.formColumns {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 16px;
+}
+
+.submitRecordButton {
+  width: 100%;
+  min-height: 54px;
+  margin-top: 5px;
+  border-radius: 27px;
+  background: #316cf0;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 5px 14px rgba(49, 108, 240, 0.22);
+}
+
+.submitRecordButton:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
 .profileScreen {
   min-height: calc(100vh - 102px);
 }
@@ -782,6 +941,31 @@
   .timeline {
     gap: 14px;
     padding-top: 18px;
+  }
+
+  .createRecordButton {
+    right: 16px;
+    bottom: 96px;
+    min-height: 52px;
+    padding-right: 17px;
+  }
+
+  .recordForm {
+    margin: 17px auto;
+    padding: 23px 18px 25px;
+  }
+
+  .formIntro {
+    margin-bottom: 24px;
+  }
+
+  .formIntro h2 {
+    font-size: 21px;
+  }
+
+  .formColumns {
+    grid-template-columns: 1fr;
+    gap: 0;
   }
 
   .post {

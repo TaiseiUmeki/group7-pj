@@ -1,11 +1,13 @@
 "use client";
 
+import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import styles from "./page.module.css";
 
 type TimelineTab = "recommended" | "following";
-type View = "timeline" | "postDetail" | "quickStart" | "profile" | "member";
+type View = "timeline" | "postDetail" | "quickStart" | "createRecord" | "profile" | "member";
 type Tone = "blue" | "green" | "purple";
+type BodyPart = "胸" | "背中" | "脚" | "肩" | "腕" | "体幹";
 
 type TrainingLog = {
   date: string;
@@ -45,6 +47,23 @@ type WorkoutSession = {
 
 type WorkoutRecordResponse = {
   id: number;
+};
+
+type DetailedWorkoutInput = {
+  bodyPart: BodyPart;
+  exercise: string;
+  startTime: string;
+  durationMinutes: number;
+  note: string;
+};
+
+const exercisesByBodyPart: Record<BodyPart, string[]> = {
+  胸: ["ベンチプレス", "インクラインプレス", "ダンベルフライ", "プッシュアップ"],
+  背中: ["デッドリフト", "ラットプルダウン", "ベントオーバーロウ", "懸垂"],
+  脚: ["スクワット", "レッグプレス", "ブルガリアンスクワット", "レッグカール"],
+  肩: ["ショルダープレス", "サイドレイズ", "リアレイズ", "アップライトロウ"],
+  腕: ["アームカール", "トライセプスプレスダウン", "ディップス", "ハンマーカール"],
+  体幹: ["プランク", "アブローラー", "クランチ", "サイドプランク"],
 };
 
 const myProfile: Profile = {
@@ -150,6 +169,8 @@ export default function Home() {
   const [completedPosts, setCompletedPosts] = useState<TimelinePost[]>([]);
   const [postingWorkout, setPostingWorkout] = useState(false);
   const [workoutError, setWorkoutError] = useState("");
+  const [postingDetailedWorkout, setPostingDetailedWorkout] = useState(false);
+  const [detailedWorkoutError, setDetailedWorkoutError] = useState("");
 
   const openTimeline = () => {
     setSelectedProfile(null);
@@ -182,6 +203,11 @@ export default function Home() {
       elapsedBeforePause: 0,
     });
     setView("quickStart");
+  };
+
+  const openCreateRecord = () => {
+    setDetailedWorkoutError("");
+    setView("createRecord");
   };
 
   const toggleWorkoutPause = () => {
@@ -268,6 +294,65 @@ export default function Home() {
     }
   };
 
+  const createDetailedWorkout = async (input: DetailedWorkoutInput) => {
+    if (postingDetailedWorkout) {
+      return;
+    }
+
+    const token = window.localStorage.getItem("group7pj_token");
+
+    if (!token) {
+      setDetailedWorkoutError("ログイン情報を確認できません。もう一度ログインしてください。");
+      return;
+    }
+
+    setPostingDetailedWorkout(true);
+    setDetailedWorkoutError("");
+
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+      const response = await fetch(`${apiUrl}/api/workout-records`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          record_type: "normal",
+          exercise_type: `${input.bodyPart} / ${input.exercise}`,
+          start_time: new Date(input.startTime).toISOString(),
+          duration_minutes: input.durationMinutes,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as WorkoutRecordResponse | { error?: string } | null;
+      if (!response.ok || !payload || !("id" in payload)) {
+        const message = payload && "error" in payload ? payload.error : undefined;
+        throw new Error(message || "トレーニング記録を保存できませんでした。");
+      }
+
+      const note = input.note.trim();
+      setCompletedPosts((posts) => [{
+        id: `workout-${payload.id}`,
+        author: myProfile,
+        didTrain: true,
+        exercise: input.exercise,
+        duration: `${input.durationMinutes}分`,
+        summary: note || `${input.bodyPart}のトレーニングを記録しました。`,
+        detail: note || `${input.bodyPart}を中心に${input.exercise}を実施しました。`,
+        trainedAt: formatWorkoutPeriod(input.startTime, input.durationMinutes),
+        postedAt: "たった今",
+        likes: 0,
+      }, ...posts]);
+      setActiveTab("following");
+      openTimeline();
+    } catch (error) {
+      setDetailedWorkoutError(error instanceof Error ? error.message : "トレーニング記録を保存できませんでした。");
+    } finally {
+      setPostingDetailedWorkout(false);
+    }
+  };
+
   return (
     <main className={styles.app}>
       <section className={styles.viewport}>
@@ -280,6 +365,7 @@ export default function Home() {
             onToggleLike={toggleLike}
             likedPostIDs={likedPostIDs}
             completedPosts={completedPosts}
+            onCreateRecord={openCreateRecord}
           />
         )}
         {view === "postDetail" && selectedPost && (
@@ -298,6 +384,14 @@ export default function Home() {
             posting={postingWorkout}
             onTogglePause={toggleWorkoutPause}
             onFinish={finishWorkout}
+          />
+        )}
+        {view === "createRecord" && (
+          <CreateRecordScreen
+            errorMessage={detailedWorkoutError}
+            posting={postingDetailedWorkout}
+            onBack={openTimeline}
+            onSubmit={createDetailedWorkout}
           />
         )}
         {view === "profile" && <ProfileScreen profile={myProfile} own />}
@@ -327,6 +421,7 @@ function TimelineScreen({
   onToggleLike,
   likedPostIDs,
   completedPosts,
+  onCreateRecord,
 }: {
   activeTab: TimelineTab;
   onSelectTab: (tab: TimelineTab) => void;
@@ -335,6 +430,7 @@ function TimelineScreen({
   onToggleLike: (postID: TimelinePost["id"]) => void;
   likedPostIDs: Array<TimelinePost["id"]>;
   completedPosts: TimelinePost[];
+  onCreateRecord: () => void;
 }) {
   const posts = activeTab === "recommended" ? recommendedPosts : [...completedPosts, ...followingPosts];
 
@@ -406,6 +502,10 @@ function TimelineScreen({
           </article>
         ))}
       </section>
+      <button className={styles.createRecordButton} onClick={onCreateRecord} type="button">
+        <PlusIcon />
+        <span>記録を作成</span>
+      </button>
     </>
   );
 }
@@ -598,6 +698,134 @@ function QuickStartScreen({
   );
 }
 
+function CreateRecordScreen({
+  errorMessage,
+  posting,
+  onBack,
+  onSubmit,
+}: {
+  errorMessage: string;
+  posting: boolean;
+  onBack: () => void;
+  onSubmit: (input: DetailedWorkoutInput) => void;
+}) {
+  const [bodyPart, setBodyPart] = useState<BodyPart | "">("");
+  const [exercise, setExercise] = useState("");
+  const [startTime, setStartTime] = useState(getLocalDateTimeInputValue);
+  const [durationMinutes, setDurationMinutes] = useState("45");
+  const [note, setNote] = useState("");
+
+  const availableExercises = bodyPart ? exercisesByBodyPart[bodyPart] : [];
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!bodyPart || !exercise) {
+      return;
+    }
+
+    onSubmit({
+      bodyPart,
+      exercise,
+      startTime,
+      durationMinutes: Number(durationMinutes),
+      note,
+    });
+  };
+
+  return (
+    <section className={styles.createScreen}>
+      <header className={styles.profileHeader}>
+        <button className={styles.back} onClick={onBack} type="button" aria-label="タイムラインに戻る">
+          <ArrowIcon />
+        </button>
+        <h1>記録を作成</h1>
+        <span className={styles.headerSpacer} />
+      </header>
+      <form className={styles.recordForm} onSubmit={handleSubmit}>
+        <div className={styles.formIntro}>
+          <p>DETAIL RECORD</p>
+          <h2>トレーニング内容を記録</h2>
+          <span>クイックスタートより詳しく、行ったメニューや振り返りを残せます。</span>
+        </div>
+
+        <label className={styles.formField}>
+          <span>行なった日時</span>
+          <input
+            onChange={(event) => setStartTime(event.target.value)}
+            required
+            type="datetime-local"
+            value={startTime}
+          />
+        </label>
+
+        <label className={styles.formField}>
+          <span>行なった時間</span>
+          <div className={styles.durationField}>
+            <input
+              min="1"
+              onChange={(event) => setDurationMinutes(event.target.value)}
+              required
+              type="number"
+              value={durationMinutes}
+            />
+            <span>分</span>
+          </div>
+        </label>
+
+        <div className={styles.formColumns}>
+          <label className={styles.formField}>
+            <span>部位</span>
+            <select
+              onChange={(event) => {
+                setBodyPart(event.target.value as BodyPart | "");
+                setExercise("");
+              }}
+              required
+              value={bodyPart}
+            >
+              <option value="">選択してください</option>
+              {Object.keys(exercisesByBodyPart).map((part) => (
+                <option key={part} value={part}>{part}</option>
+              ))}
+            </select>
+          </label>
+          <label className={styles.formField}>
+            <span>トレーニング種目</span>
+            <select
+              disabled={!bodyPart}
+              onChange={(event) => setExercise(event.target.value)}
+              required
+              value={exercise}
+            >
+              <option value="">{bodyPart ? "選択してください" : "先に部位を選択"}</option>
+              {availableExercises.map((item) => (
+                <option key={item} value={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <label className={styles.formField}>
+          <span>その他のメモ <small>任意</small></span>
+          <textarea
+            maxLength={400}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="重量、回数、達成したこと、次回試したいことなど"
+            rows={5}
+            value={note}
+          />
+        </label>
+
+        {errorMessage ? <p className={styles.workoutError} role="alert">{errorMessage}</p> : null}
+        <button className={styles.submitRecordButton} disabled={posting} type="submit">
+          {posting ? "投稿中..." : "タイムラインに投稿する"}
+        </button>
+      </form>
+    </section>
+  );
+}
+
 function getWorkoutElapsed(session: WorkoutSession) {
   if (session.activeSince === null) {
     return session.elapsedBeforePause;
@@ -626,6 +854,29 @@ function formatWorkoutDuration(elapsedMs: number) {
   return seconds ? `${minutes}分${seconds}秒` : `${minutes}分`;
 }
 
+function getLocalDateTimeInputValue() {
+  const date = new Date();
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 16);
+}
+
+function formatWorkoutPeriod(startTime: string, durationMinutes: number) {
+  const start = new Date(startTime);
+  const end = new Date(start.getTime() + durationMinutes * 60000);
+  const dateFormatter = new Intl.DateTimeFormat("ja-JP", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const timeFormatter = new Intl.DateTimeFormat("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  return `${dateFormatter.format(start)} - ${timeFormatter.format(end)}`;
+}
+
 function Stat({ value, label }: { value: string; label: string }) {
   return (
     <div className={styles.stat}>
@@ -646,7 +897,7 @@ function BottomNav({
   onQuickStart: () => void;
   onProfile: () => void;
 }) {
-  const timelineActive = activeView === "timeline" || activeView === "postDetail" || activeView === "member";
+  const timelineActive = activeView === "timeline" || activeView === "postDetail" || activeView === "createRecord" || activeView === "member";
 
   return (
     <nav className={styles.nav} aria-label="メインナビゲーション">
@@ -739,6 +990,14 @@ function ArrowIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M15 4.5 7.5 12 15 19.5M8 12h11" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" />
     </svg>
   );
 }
