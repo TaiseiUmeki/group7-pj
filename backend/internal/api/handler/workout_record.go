@@ -150,16 +150,16 @@ func (h *Handler) GetLatestWorkoutRecord(c *gin.Context) {
 		return
 	}
 
-	records, err := h.service.GetWorkoutRecords(user.ID)
+	record, err := h.service.GetLatestWorkoutRecord(user.ID)
 	if err != nil {
+		if err == repository.ErrWorkoutRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if len(records) == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "no workout records found"})
-		return
-	}
-	c.JSON(http.StatusOK, records[0])
+	c.JSON(http.StatusOK, record)
 }
 
 func (h *Handler) currentUserFromContext(c *gin.Context) (*model.User, error) {

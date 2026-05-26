@@ -26,6 +26,7 @@ type Repository interface {
 	// WorkoutRecord関連
 	GetWorkoutRecordByIDAndUserID(id, userID int) (*model.WorkoutRecord, error)
 	GetWorkoutRecordsByUserID(userID int) ([]*model.WorkoutRecord, error)
+	GetLatestWorkoutRecordByUserID(userID int) (*model.WorkoutRecord, error)
 	CreateWorkoutRecord(record *model.WorkoutRecord) error
 	UpdateWorkoutRecord(record *model.WorkoutRecord) error
 	DeleteWorkoutRecord(id int) error
@@ -110,6 +111,18 @@ func (r *MySQLRepository) GetWorkoutRecordsByUserID(userID int) ([]*model.Workou
 		return nil, err
 	}
 	return records, nil
+}
+
+// GetLatestWorkoutRecordByUserID はユーザーの最新の運動記録を取得します
+func (r *MySQLRepository) GetLatestWorkoutRecordByUserID(userID int) (*model.WorkoutRecord, error) {
+	var record model.WorkoutRecord
+	if err := r.db.Where("user_id = ?", userID).Order("start_time DESC").First(&record).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrWorkoutRecordNotFound
+		}
+		return nil, err
+	}
+	return &record, nil
 }
 
 // CreateWorkoutRecord は運動記録を作成します

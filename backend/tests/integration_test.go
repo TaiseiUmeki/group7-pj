@@ -117,6 +117,22 @@ func (f *fakeRepo) GetWorkoutRecordsByUserID(userID int) ([]*model.WorkoutRecord
 	return records, nil
 }
 
+func (f *fakeRepo) GetLatestWorkoutRecordByUserID(userID int) (*model.WorkoutRecord, error) {
+	var latest *model.WorkoutRecord
+	for _, record := range f.recordsByID {
+		if record.UserID != userID {
+			continue
+		}
+		if latest == nil || record.StartTime.After(latest.StartTime) {
+			latest = record
+		}
+	}
+	if latest == nil {
+		return nil, repository.ErrWorkoutRecordNotFound
+	}
+	return latest, nil
+}
+
 func (f *fakeRepo) CreateWorkoutRecord(record *model.WorkoutRecord) error {
 	if record.ID == 0 {
 		record.ID = f.nextRecordID
@@ -155,7 +171,7 @@ func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 	svc := service.NewService(repo, "test-secret")
 	h := handler.NewHandler(svc)
 
-	// build a gin router for tests using this handler
+	// このハンドラーを使って、テスト用の Gin ルーターを組み立てる
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.POST("/api/auth/login", h.Login)

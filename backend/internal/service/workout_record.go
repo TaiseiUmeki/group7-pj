@@ -25,6 +25,11 @@ func (s *Service) GetWorkoutRecords(userID int) ([]*model.WorkoutRecord, error) 
 	return s.repo.GetWorkoutRecordsByUserID(userID)
 }
 
+// GetLatestWorkoutRecord returns the most recent workout record for the user
+func (s *Service) GetLatestWorkoutRecord(userID int) (*model.WorkoutRecord, error) {
+	return s.repo.GetLatestWorkoutRecordByUserID(userID)
+}
+
 // GetWorkoutRecord はユーザーの運動記録を1件取得します。
 func (s *Service) GetWorkoutRecord(userID, recordID int) (*model.WorkoutRecord, error) {
 	return s.repo.GetWorkoutRecordByIDAndUserID(recordID, userID)
