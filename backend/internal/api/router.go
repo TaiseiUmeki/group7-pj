@@ -9,33 +9,39 @@ import (
 	"backend/internal/repository"
 	"backend/internal/service"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-// NewRouter はHTTPルーターを初期化します
+// NewRouter initializes the Gin router and returns it as an http.Handler
 func NewRouter(db *gorm.DB, jwtSecret string) http.Handler {
-	// リポジトリ、サービス、ハンドラーを作成
 	repo := repository.NewMySQLRepository(db)
 	svc := service.NewService(repo, jwtSecret)
 	h := handler.NewHandler(svc)
 
-	mux := http.NewServeMux()
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.New()
 
-	// ルート定義
-	mux.HandleFunc("/health", h.HealthCheck)
+	// Apply middleware
+	r.Use(middleware.LoggingMiddleware())
+	r.Use(middleware.CORSMiddleware())
 
-	// Register auth login with and without trailing slash to avoid
-	// accidental 404s caused by subtle path differences.
-	mux.HandleFunc("/api/auth/login", h.Login)
-	mux.HandleFunc("/api/auth/login/", h.Login)
+	// Routes
+	r.GET("/health", h.HealthCheck)
 
-	mux.HandleFunc("/api/auth/me", h.Me)
-	mux.HandleFunc("/api/users", h.GetAllUsers)
-	mux.HandleFunc("/api/users/get", h.GetUser)
+	r.POST("/api/auth/login", h.Login)
+	r.GET("/api/auth/me", h.Me)
 
-	// Log registered routes for easier debugging
-	log.Println("Registered routes: /health, /api/auth/login, /api/auth/me, /api/users, /api/users/get")
+	r.GET("/api/users", h.GetAllUsers)
+	r.GET("/api/users/get", h.GetUser)
 
-	// ミドルウェアを適用
-	return middleware.CORSMiddleware(middleware.LoggingMiddleware(mux))
+	r.GET("/api/workout-records", h.ListWorkoutRecords)
+	r.POST("/api/workout-records", h.CreateWorkoutRecord)
+	r.GET("/api/workout-records/:id", h.GetWorkoutRecord)
+	r.PUT("/api/workout-records/:id", h.UpdateWorkoutRecord)
+	r.GET("/api/workout-records/latest", h.GetLatestWorkoutRecord)
+
+	log.Println("Registered routes: /health, /api/auth/login, /api/auth/me, /api/users, /api/workout-records")
+
+	return r
 }

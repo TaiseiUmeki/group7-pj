@@ -4,34 +4,36 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
-// CORSMiddleware はCORSヘッダーを付与し、preflight を処理します
-func CORSMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept")
-		w.Header().Set("Access-Control-Max-Age", "86400")
+// CORSMiddleware returns a Gin middleware to handle CORS and preflight
+func CORSMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept")
+		c.Writer.Header().Set("Access-Control-Max-Age", "86400")
 
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
 
-		next.ServeHTTP(w, r)
-	})
+		c.Next()
+	}
 }
 
-// LoggingMiddleware はHTTPリクエストのログを記録します
-func LoggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// LoggingMiddleware logs requests and durations as a Gin middleware
+func LoggingMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
 		startTime := time.Now()
-		log.Printf("%s %s %s", r.Method, r.RequestURI, r.RemoteAddr)
+		log.Printf("%s %s %s", c.Request.Method, c.Request.RequestURI, c.ClientIP())
 
-		next.ServeHTTP(w, r)
+		c.Next()
 
 		duration := time.Since(startTime)
 		log.Printf("Completed in %v", duration)
-	})
+	}
 }
