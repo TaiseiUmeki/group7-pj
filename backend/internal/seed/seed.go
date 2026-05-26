@@ -20,6 +20,9 @@ func Run(db *gorm.DB) error {
 		var existing model.User
 		err := db.Where("email = ?", seedUser.Email).First(&existing).Error
 		if err == nil {
+			if err := ensureDefaultProfile(db, &existing); err != nil {
+				return err
+			}
 			continue
 		}
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -28,7 +31,33 @@ func Run(db *gorm.DB) error {
 		if err := db.Create(&seedUser).Error; err != nil {
 			return err
 		}
+		if err := ensureDefaultProfile(db, &seedUser); err != nil {
+			return err
+		}
 	}
 
 	return nil
+}
+
+func ensureDefaultProfile(db *gorm.DB, user *model.User) error {
+	var existing model.Profile
+	err := db.Where("user_id = ?", user.ID).First(&existing).Error
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+
+	username := user.Name
+	if username == "" {
+		username = user.Email
+	}
+
+	profile := model.Profile{
+		UserID:                user.ID,
+		Username:              username,
+		TrainingFrequencyDays: 3,
+	}
+	return db.Create(&profile).Error
 }

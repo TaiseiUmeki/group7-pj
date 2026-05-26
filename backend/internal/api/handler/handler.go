@@ -1,11 +1,13 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"backend/internal/service"
+
+	"github.com/gin-gonic/gin"
 )
 
 // Handler はHTTPハンドラーを扱う構造体です
@@ -21,54 +23,107 @@ func NewHandler(svc *service.Service) *Handler {
 }
 
 // HealthCheck はサーバーのヘルスチェックを行います
-func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+func (h *Handler) HealthCheck(c *gin.Context) {
+	c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // GetAllUsers はすべてのユーザー情報を取得します
-func (h *Handler) GetAllUsers(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetAllUsers(c *gin.Context) {
 	users, err := h.service.GetAllUsers()
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(users)
+	c.JSON(http.StatusOK, users)
 }
 
 // GetUser はIDからユーザー情報を取得します
-func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
+func (h *Handler) GetUser(c *gin.Context) {
+	idStr := c.Query("id")
 	if idStr == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "id parameter is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id parameter is required"})
 		return
 	}
-
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "invalid id parameter"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id parameter"})
 		return
 	}
 
 	user, err := h.service.GetUser(id)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, user)
+}
+
+// Login はメールアドレスとパスワードでJWTを発行します
+func (h *Handler) Login(c *gin.Context) {
+	var req struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(user)
+	user, token, err := h.service.Login(req.Email, req.Password)
+	if err != nil {
+		if strings.Contains(err.Error(), "invalid email or password") {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"token": token, "user": user})
+}
+
+// Signup は新規ユーザー登録を行います
+func (h *Handler) Signup(c *gin.Context) {
+	var req struct {
+		Name     string `json:"name"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	user, err := h.service.Register(req.Name, req.Email, req.Password)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// hide password hash
+	user.PasswordHash = ""
+	c.JSON(http.StatusCreated, user)
+}
+
+// Me はJWTの内容から現在のユーザーを返します
+func (h *Handler) Me(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authorization header is required"})
+		return
+	}
+
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	if tokenString == authHeader {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "bearer token is required"})
+		return
+	}
+
+	user, err := h.service.GetCurrentUser(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, user)
 }
