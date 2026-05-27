@@ -42,7 +42,9 @@ func NewRouter(db *gorm.DB, jwtSecret string) http.Handler {
 	r.PUT("/api/workout-records/:id", h.UpdateWorkoutRecord)
 	r.GET("/api/workout-records/latest", h.GetLatestWorkoutRecord)
 
-	log.Println("Registered routes: /health, /api/auth/login, /api/auth/me, /api/users, /api/workout-records")
+	r.POST("/api/posts", h.CreateTrainingPost)
+
+	log.Println("Registered routes: /health, /api/auth/login, /api/auth/me, /api/users, /api/workout-records, /api/posts")
 
 	return r
 }
