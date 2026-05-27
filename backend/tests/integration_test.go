@@ -260,7 +260,7 @@ func TestLoginFailure(t *testing.T) {
 func TestSignupSuccess(t *testing.T) {
 	router, _, _ := newTestRouter(t)
 
-	body := bytes.NewBufferString(`{"name":"New User","email":"new@example.com","password":"secret"}`)
+	body := bytes.NewBufferString(`{"username":"New User","email":"new@example.com","password":"secret"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/signup", body)
 	w := httptest.NewRecorder()
 
@@ -282,7 +282,7 @@ func TestSignupDuplicateEmail(t *testing.T) {
 	router, seedUser, _ := newTestRouter(t)
 
 	// try to signup with same email as seedUser
-	body := bytes.NewBufferString(`{"name":"Dup","email":"` + seedUser.Email + `","password":"secret"}`)
+	body := bytes.NewBufferString(`{"username":"Dup","email":"` + seedUser.Email + `","password":"secret"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/signup", body)
 	w := httptest.NewRecorder()
 

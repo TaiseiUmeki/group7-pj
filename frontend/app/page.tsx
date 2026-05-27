@@ -296,6 +296,12 @@ export default function Home() {
     lastPostedAt: getLatestPostedAt(workoutRecords) ?? currentProfile.lastPostedAt,
   };
 
+  const handleSignout = () => {
+    window.localStorage.removeItem("group7pj_token");
+    document.cookie = "group7pj_token=; path=/; max-age=0; samesite=lax";
+    window.location.href = "/login";
+  };
+
   const openTimeline = () => {
     setSelectedProfile(null);
     setSelectedPost(null);
@@ -533,6 +539,7 @@ export default function Home() {
             profile={ownProfile}
             own
             onUpdate={setCurrentProfile}
+            onSignout={handleSignout}
             recordErrorMessage={workoutRecordsError}
           />
         )}
@@ -729,12 +736,14 @@ function ProfileScreen({
   onBack,
   recordErrorMessage,
   onUpdate,
+  onSignout,
 }: {
   profile: Profile;
   own?: boolean;
   onBack?: () => void;
   recordErrorMessage?: string;
   onUpdate?: (profile: Profile) => void;
+  onSignout?: () => void;
 }) {
   const [panel, setPanel] = useState<"summary" | "edit" | "following" | "followers">("summary");
   const inactiveDays = getDaysWithoutPost(profile.lastPostedAt);
@@ -859,6 +868,12 @@ function ProfileScreen({
             <p className={styles.emptyState}>まだトレーニング記録がありません。</p>
           )}
         </div>
+
+        {own && onSignout ? (
+          <button className={styles.signoutButton} onClick={onSignout} type="button">
+            サインアウト
+          </button>
+        ) : null}
       </div>
     </section>
   );
