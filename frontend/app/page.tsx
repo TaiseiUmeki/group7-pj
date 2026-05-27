@@ -75,6 +75,12 @@ export default function Home() {
     lastPostedAt: getLatestPostedAt(workoutRecords) ?? currentProfile.lastPostedAt,
   };
 
+  const handleSignout = () => {
+    window.localStorage.removeItem("group7pj_token");
+    document.cookie = "group7pj_token=; path=/; max-age=0; samesite=lax";
+    window.location.href = "/login";
+  };
+
   const openTimeline = () => {
     setSelectedProfile(null);
     setSelectedPost(null);
@@ -316,6 +322,7 @@ export default function Home() {
             profile={ownProfile}
             own
             onUpdate={setCurrentProfile}
+            onSignout={handleSignout}
             recordErrorMessage={workoutRecordsError}
           />
         )}

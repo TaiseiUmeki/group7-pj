@@ -771,6 +771,19 @@
   font-size: 14px;
 }
 
+.signoutButton {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 32px;
+  border: 1px solid #e8d5d4;
+  border-radius: 24px;
+  background: #fff;
+  color: #bd352d;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .log {
   padding: 16px 18px;
   border: 1px solid #e6ebf2;

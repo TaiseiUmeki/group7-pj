@@ -194,12 +194,14 @@ export function ProfileScreen({
   onBack,
   recordErrorMessage,
   onUpdate,
+  onSignout,
 }: {
   profile: Profile;
   own?: boolean;
   onBack?: () => void;
   recordErrorMessage?: string;
   onUpdate?: (profile: Profile) => void;
+  onSignout?: () => void;
 }) {
   const [panel, setPanel] = useState<"summary" | "edit" | "following" | "followers">("summary");
   const inactiveDays = getDaysWithoutPost(profile.lastPostedAt);
@@ -325,6 +327,12 @@ export function ProfileScreen({
             <p className={styles.emptyState}>まだトレーニング記録がありません。</p>
           )}
         </div>
+
+        {own && onSignout ? (
+          <button className={styles.signoutButton} onClick={onSignout} type="button">
+            サインアウト
+          </button>
+        ) : null}
       </div>
     </section>
   );

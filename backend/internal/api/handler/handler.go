@@ -85,7 +85,7 @@ func (h *Handler) Login(c *gin.Context) {
 // Signup は新規ユーザー登録を行います
 func (h *Handler) Signup(c *gin.Context) {
 	var req struct {
-		Name     string `json:"name"`
+		Username string `json:"username"`
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
@@ -94,13 +94,12 @@ func (h *Handler) Signup(c *gin.Context) {
 		return
 	}
 
-	user, err := h.service.Register(req.Name, req.Email, req.Password)
+	user, err := h.service.Register(req.Username, req.Email, req.Password)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// hide password hash
 	user.PasswordHash = ""
 	c.JSON(http.StatusCreated, user)
 }
