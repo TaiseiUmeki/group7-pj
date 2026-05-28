@@ -357,6 +357,58 @@ func TestProtectedRoutesRequireBearerToken(t *testing.T) {
 	}
 }
 
+func TestCreateTrainingPostAcceptsCamelCaseBody(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	body := bytes.NewBufferString(`{"didTrain":true,"trainedOn":"2026-05-28","startedAt":"2026-05-28T10:00:00Z","endedAt":"2026-05-28T10:45:00Z","exerciseType":1,"durationMinutes":45,"note":"bench day"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/posts", body)
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		ID int `json:"id"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode post response: %v", err)
+	}
+	if resp.ID == 0 {
+		t.Fatal("expected post id to be returned")
+	}
+}
+
+func TestCreateTrainingPostAcceptsSnakeCaseBody(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	body := bytes.NewBufferString(`{"did_train":true,"trained_on":"2026-05-28","started_at":"2026-05-28T10:00:00Z","ended_at":"2026-05-28T10:45:00Z","exercise_type":1,"duration_minutes":45,"note":"bench day"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/posts", body)
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		ID int `json:"id"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode post response: %v", err)
+	}
+	if resp.ID == 0 {
+		t.Fatal("expected post id to be returned")
+	}
+}
+
 func TestSignupSuccess(t *testing.T) {
 	router, _, _ := newTestRouter(t)
 

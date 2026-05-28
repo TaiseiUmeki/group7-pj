@@ -10,15 +10,22 @@ import (
 
 // TrainingPostRequest はトレーニング報告投稿の作成入力です。
 type TrainingPostRequest struct {
-	SessionID       *int    `json:"sessionId"`
-	DidTrain        *bool   `json:"didTrain"`
-	TrainedOn       string  `json:"trainedOn"`
-	StartedAt       *string `json:"startedAt"`
-	EndedAt         *string `json:"endedAt"`
-	ExerciseType    *int    `json:"exerciseType"`
-	DurationMinutes *int    `json:"durationMinutes"`
-	Note            *string `json:"note"`
-	Visibility      string  `json:"visibility"`
+	SessionID            *int    `json:"sessionId"`
+	SessionIDSnake       *int    `json:"session_id"`
+	DidTrain             *bool   `json:"didTrain"`
+	DidTrainSnake        *bool   `json:"did_train"`
+	TrainedOn            string  `json:"trainedOn"`
+	TrainedOnSnake       string  `json:"trained_on"`
+	StartedAt            *string `json:"startedAt"`
+	StartedAtSnake       *string `json:"started_at"`
+	EndedAt              *string `json:"endedAt"`
+	EndedAtSnake         *string `json:"ended_at"`
+	ExerciseType         *int    `json:"exerciseType"`
+	ExerciseTypeSnake    *int    `json:"exercise_type"`
+	DurationMinutes      *int    `json:"durationMinutes"`
+	DurationMinutesSnake *int    `json:"duration_minutes"`
+	Note                 *string `json:"note"`
+	Visibility           string  `json:"visibility"`
 }
 
 // CreateTrainingPost はトレーニング報告投稿を作成します。
@@ -36,13 +43,13 @@ func (h *Handler) CreateTrainingPost(c *gin.Context) {
 	}
 
 	post, err := h.service.CreateTrainingPost(user.ID, service.TrainingPostInput{
-		SessionID:       req.SessionID,
-		DidTrain:        req.DidTrain,
-		TrainedOn:       req.TrainedOn,
-		StartedAt:       req.StartedAt,
-		EndedAt:         req.EndedAt,
-		ExerciseType:    req.ExerciseType,
-		DurationMinutes: req.DurationMinutes,
+		SessionID:       pickInt(req.SessionID, req.SessionIDSnake),
+		DidTrain:        pickBool(req.DidTrain, req.DidTrainSnake),
+		TrainedOn:       pickString(req.TrainedOn, req.TrainedOnSnake),
+		StartedAt:       pickStringPtr(req.StartedAt, req.StartedAtSnake),
+		EndedAt:         pickStringPtr(req.EndedAt, req.EndedAtSnake),
+		ExerciseType:    pickInt(req.ExerciseType, req.ExerciseTypeSnake),
+		DurationMinutes: pickInt(req.DurationMinutes, req.DurationMinutesSnake),
 		Note:            req.Note,
 		Visibility:      req.Visibility,
 	})
@@ -52,4 +59,32 @@ func (h *Handler) CreateTrainingPost(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"id": post.ID})
+}
+
+func pickInt(primary, fallback *int) *int {
+	if primary != nil {
+		return primary
+	}
+	return fallback
+}
+
+func pickBool(primary, fallback *bool) *bool {
+	if primary != nil {
+		return primary
+	}
+	return fallback
+}
+
+func pickString(primary, fallback string) string {
+	if primary != "" {
+		return primary
+	}
+	return fallback
+}
+
+func pickStringPtr(primary, fallback *string) *string {
+	if primary != nil {
+		return primary
+	}
+	return fallback
 }

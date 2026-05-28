@@ -22,6 +22,12 @@
 | `Accept: application/json` | 推奨 | JSONレスポンスを受け取る |
 | `Authorization: Bearer <token>` | 認証API以外必須 | JWTアクセストークン |
 
+### 1.3.1 JSONフィールド命名
+
+- APIのJSONフィールド名は原則として `camelCase` とする。
+- DBカラム名は `snake_case` とする。
+- `POST /api/posts` は移行互換のため、リクエスト入力に限り `snake_case` も受け付ける。
+
 ### 1.4 エラーレスポンス形式
 
 ```json
@@ -272,6 +278,7 @@
 ### POST /api/posts
 
 - **説明**: 事後報告またはクイックスタート終了後の報告投稿を作成する。
+- **備考**: 正式なリクエスト形式は `camelCase`。移行互換として `session_id`, `did_train`, `trained_on`, `started_at`, `ended_at`, `exercise_type`, `duration_minutes` も同じ意味で受け付ける。
 - **リクエスト**:
 
 ```json
