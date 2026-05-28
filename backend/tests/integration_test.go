@@ -1,20 +1,22 @@
 package tests
 
 import (
-	"backend/internal/api"
-	"backend/internal/api/handler"
-	"backend/internal/model"
-	"backend/internal/repository"
-	"backend/internal/service"
 	"bytes"
 	"encoding/json"
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"backend/internal/api"
+	"backend/internal/api/handler"
+	"backend/internal/api/middleware"
+	"backend/internal/model"
+	"backend/internal/repository"
+	"backend/internal/service"
+
+	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -40,7 +42,9 @@ type fakeRepo struct {
 	nextUserID    int
 	nextProfileID int
 	recordsByID   map[int]*model.WorkoutRecord
+	postsByID     map[int]*model.TrainingPost
 	nextRecordID  int
+	nextPostID    int
 }
 
 func newFakeRepo(seedUser *model.User) *fakeRepo {
@@ -59,7 +63,9 @@ func newFakeRepo(seedUser *model.User) *fakeRepo {
 		nextUserID:    len(usersByID) + 1,
 		nextProfileID: 1,
 		recordsByID:   map[int]*model.WorkoutRecord{},
+		postsByID:     map[int]*model.TrainingPost{},
 		nextRecordID:  1,
+		nextPostID:    1,
 	}
 }
 
@@ -199,6 +205,11 @@ func (f *fakeRepo) DeleteWorkoutRecord(id int) error {
 }
 
 func (f *fakeRepo) CreateTrainingPost(post *model.TrainingPost) error {
+	if post.ID == 0 {
+		post.ID = f.nextPostID
+		f.nextPostID++
+	}
+	f.postsByID[post.ID] = post
 	return nil
 }
 
@@ -225,14 +236,18 @@ func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 	r := gin.New()
 	r.POST("/api/auth/login", h.Login)
 	r.POST("/api/auth/signup", h.Signup)
-	r.GET("/api/auth/me", h.Me)
-	r.GET("/api/me/profile", h.GetMyProfile)
-	r.POST("/api/me/profile", h.SaveMyProfile)
-	r.POST("/api/workout-records", h.CreateWorkoutRecord)
-	r.PUT("/api/workout-records/:id", h.UpdateWorkoutRecord)
-	r.GET("/api/workout-records", h.ListWorkoutRecords)
-	r.GET("/api/workout-records/:id", h.GetWorkoutRecord)
-	r.POST("/api/posts", h.CreateTrainingPost)
+
+	auth := r.Group("/api")
+	auth.Use(middleware.AuthMiddleware("test-secret"))
+	auth.GET("/auth/me", h.Me)
+	auth.GET("/me/profile", h.GetMyProfile)
+	auth.POST("/me/profile", h.SaveMyProfile)
+	auth.POST("/workout-records", h.CreateWorkoutRecord)
+	auth.PUT("/workout-records/:id", h.UpdateWorkoutRecord)
+	auth.GET("/workout-records", h.ListWorkoutRecords)
+	auth.GET("/workout-records/latest", h.GetLatestWorkoutRecord)
+	auth.GET("/workout-records/:id", h.GetWorkoutRecord)
+	auth.POST("/posts", h.CreateTrainingPost)
 
 	return r, seedUser, "test-secret"
 }
@@ -301,6 +316,44 @@ func TestLoginFailure(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status 401, got %d", w.Code)
+	}
+}
+
+func TestProtectedRoutesRequireBearerToken(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+	}{
+		{name: "me", method: http.MethodGet, path: "/api/auth/me"},
+		{name: "profile", method: http.MethodGet, path: "/api/me/profile"},
+		{name: "workout records", method: http.MethodGet, path: "/api/workout-records"},
+		{name: "create workout record", method: http.MethodPost, path: "/api/workout-records", body: `{}`},
+		{name: "create post", method: http.MethodPost, path: "/api/posts", body: `{"didTrain":true,"trainedOn":"2026-05-28"}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var body *bytes.Buffer
+			if tt.body != "" {
+				body = bytes.NewBufferString(tt.body)
+			} else {
+				body = bytes.NewBuffer(nil)
+			}
+			req := httptest.NewRequest(tt.method, tt.path, body)
+			if tt.body != "" {
+				req.Header.Set("Content-Type", "application/json")
+			}
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+			if w.Code != http.StatusUnauthorized {
+				t.Fatalf("expected status 401, got %d", w.Code)
+			}
+		})
 	}
 }
 
