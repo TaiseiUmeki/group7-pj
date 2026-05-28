@@ -105,19 +105,7 @@ func (h *Handler) Signup(c *gin.Context) {
 
 // Me はJWTの内容から現在のユーザーを返します
 func (h *Handler) Me(c *gin.Context) {
-	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authorization header is required"})
-		return
-	}
-
-	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-	if tokenString == authHeader {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "bearer token is required"})
-		return
-	}
-
-	user, err := h.service.GetCurrentUser(tokenString)
+	user, err := h.currentUserFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return

@@ -1,13 +1,13 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"backend/internal/model"
-	"errors"
 	"backend/internal/repository"
 	"backend/internal/service"
 
@@ -163,6 +163,14 @@ func (h *Handler) GetLatestWorkoutRecord(c *gin.Context) {
 }
 
 func (h *Handler) currentUserFromContext(c *gin.Context) (*model.User, error) {
+	if userIDValue, exists := c.Get("userID"); exists {
+		userID, ok := userIDValue.(int)
+		if !ok || userID == 0 {
+			return nil, errors.New("invalid authenticated user")
+		}
+		return h.service.GetUser(userID)
+	}
+
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
 		return nil, errors.New("authorization header is required")
