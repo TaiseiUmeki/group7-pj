@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -213,6 +214,60 @@ func (f *fakeRepo) CreateTrainingPost(post *model.TrainingPost) error {
 	return nil
 }
 
+func (f *fakeRepo) ListTimelinePosts(input repository.TimelineQuery) ([]repository.TimelinePostRow, error) {
+	posts := make([]*model.TrainingPost, 0, len(f.postsByID))
+	for _, post := range f.postsByID {
+		if post.UserID == input.UserID || post.DeletedAt != nil {
+			continue
+		}
+		posts = append(posts, post)
+	}
+	sort.Slice(posts, func(i, j int) bool {
+		if posts[i].CreatedAt.Equal(posts[j].CreatedAt) {
+			return posts[i].ID > posts[j].ID
+		}
+		return posts[i].CreatedAt.After(posts[j].CreatedAt)
+	})
+
+	rows := make([]repository.TimelinePostRow, 0, len(posts))
+	for _, post := range posts {
+		if input.CursorTime != nil && input.CursorID != nil {
+			if post.CreatedAt.After(*input.CursorTime) || (post.CreatedAt.Equal(*input.CursorTime) && post.ID >= *input.CursorID) {
+				continue
+			}
+		}
+		if len(rows) >= input.Limit {
+			break
+		}
+		profile, err := f.GetProfileByUserID(post.UserID)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, repository.TimelinePostRow{
+			ID:                    post.ID,
+			Source:                input.Source,
+			UserID:                post.UserID,
+			DidTrain:              post.DidTrain,
+			TrainedOn:             post.TrainedOn,
+			StartedAt:             post.StartedAt,
+			EndedAt:               post.EndedAt,
+			ExerciseType:          post.ExerciseType,
+			DurationMinutes:       post.DurationMinutes,
+			Note:                  post.Note,
+			Visibility:            post.Visibility,
+			CreatedAt:             post.CreatedAt,
+			AuthorProfileID:       profile.ID,
+			AuthorUserID:          profile.UserID,
+			AuthorUsername:        profile.Username,
+			AuthorBio:             profile.Bio,
+			TrainingFrequencyDays: profile.TrainingFrequencyDays,
+			LikeCount:             0,
+			LikedByMe:             false,
+		})
+	}
+	return rows, nil
+}
+
 func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 	t.Helper()
 
@@ -228,6 +283,36 @@ func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 	}
 
 	repo := newFakeRepo(seedUser)
+	author := &model.User{ID: 2, Email: "author@example.com"}
+	repo.usersByID[author.ID] = author
+	repo.usersByEmail[strings.ToLower(author.Email)] = author
+	repo.nextUserID = 3
+	repo.profilesByID[1] = &model.Profile{
+		ID:                    1,
+		UserID:                author.ID,
+		Username:              "Timeline Author",
+		TrainingFrequencyDays: 3,
+	}
+	repo.profileTagIDs[1] = []int{2, 5}
+	note := "timeline post"
+	exerciseType := 1
+	durationMinutes := 45
+	startedAt := time.Date(2026, 5, 28, 10, 0, 0, 0, time.UTC)
+	endedAt := startedAt.Add(45 * time.Minute)
+	repo.postsByID[1] = &model.TrainingPost{
+		ID:              1,
+		UserID:          author.ID,
+		DidTrain:        true,
+		TrainedOn:       time.Date(2026, 5, 28, 0, 0, 0, 0, time.UTC),
+		StartedAt:       &startedAt,
+		EndedAt:         &endedAt,
+		ExerciseType:    &exerciseType,
+		DurationMinutes: &durationMinutes,
+		Note:            &note,
+		Visibility:      "followers_and_recommended",
+		CreatedAt:       time.Date(2026, 5, 28, 11, 0, 0, 0, time.UTC),
+	}
+	repo.nextPostID = 2
 	svc := service.NewService(repo, "test-secret")
 	h := handler.NewHandler(svc)
 
@@ -242,6 +327,7 @@ func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 	auth.GET("/auth/me", h.Me)
 	auth.GET("/me/profile", h.GetMyProfile)
 	auth.POST("/me/profile", h.SaveMyProfile)
+	auth.GET("/timeline", h.GetTimeline)
 	auth.POST("/workout-records", h.CreateWorkoutRecord)
 	auth.PUT("/workout-records/:id", h.UpdateWorkoutRecord)
 	auth.GET("/workout-records", h.ListWorkoutRecords)
@@ -330,6 +416,7 @@ func TestProtectedRoutesRequireBearerToken(t *testing.T) {
 	}{
 		{name: "me", method: http.MethodGet, path: "/api/auth/me"},
 		{name: "profile", method: http.MethodGet, path: "/api/me/profile"},
+		{name: "timeline", method: http.MethodGet, path: "/api/timeline?source=following"},
 		{name: "workout records", method: http.MethodGet, path: "/api/workout-records"},
 		{name: "create workout record", method: http.MethodPost, path: "/api/workout-records", body: `{}`},
 		{name: "create post", method: http.MethodPost, path: "/api/posts", body: `{"didTrain":true,"trainedOn":"2026-05-28"}`},
@@ -354,6 +441,73 @@ func TestProtectedRoutesRequireBearerToken(t *testing.T) {
 				t.Fatalf("expected status 401, got %d", w.Code)
 			}
 		})
+	}
+}
+
+func TestGetTimelineFollowing(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/timeline?source=following&limit=20", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Items []struct {
+			ID                int    `json:"id"`
+			Source            string `json:"source"`
+			DidTrain          bool   `json:"didTrain"`
+			TrainedOn         string `json:"trainedOn"`
+			ExerciseType      *int   `json:"exerciseType"`
+			ExerciseTypeLabel string `json:"exerciseTypeLabel"`
+			DurationMinutes   *int   `json:"durationMinutes"`
+			LikeCount         int    `json:"likeCount"`
+			LikedByMe         bool   `json:"likedByMe"`
+			Author            struct {
+				ID       int    `json:"id"`
+				Username string `json:"username"`
+				Tags     []struct {
+					ID    int    `json:"id"`
+					Label string `json:"label"`
+				} `json:"tags"`
+			} `json:"author"`
+		} `json:"items"`
+		NextCursor *string `json:"nextCursor"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode timeline response: %v", err)
+	}
+	if len(resp.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(resp.Items))
+	}
+	item := resp.Items[0]
+	if item.Source != "following" || item.Author.Username != "Timeline Author" {
+		t.Fatalf("unexpected timeline item: %+v", item)
+	}
+	if item.ExerciseType == nil || *item.ExerciseType != 1 || item.ExerciseTypeLabel != "胸" {
+		t.Fatalf("unexpected exercise fields: %+v", item)
+	}
+	if len(item.Author.Tags) != 2 || item.Author.Tags[0].ID != 2 || item.Author.Tags[1].ID != 5 {
+		t.Fatalf("unexpected author tags: %+v", item.Author.Tags)
+	}
+}
+
+func TestGetTimelineRejectsInvalidSource(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/timeline?source=unknown", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", w.Code)
 	}
 }
 
