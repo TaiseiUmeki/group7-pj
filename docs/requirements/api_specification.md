@@ -241,13 +241,18 @@
 
 ### GET /api/timeline
 
-- **説明**: フォロー先と推薦ユーザーの投稿サマリーを取得する。
+- **説明**: フォロー中タブまたはおすすめタブに表示する投稿サマリーを取得する。
+- **認証**: 必須。
 - **クエリパラメータ**:
 
 | パラメータ | 型 | 必須 | 説明 |
 |---|---|---|---|
-| `limit` | int | 任意 | 取得件数 |
+| `source` | string | 任意 | `following` または `recommended`。未指定時は `following` |
+| `limit` | int | 任意 | 取得件数。デフォルト20、最大50 |
 | `cursor` | string | 任意 | 次ページカーソル |
+
+- `source=following`: 自分がフォローしているユーザーの投稿を返す。
+- `source=recommended`: 当日の推薦枠最大5人に含まれるユーザーの投稿を返す。
 
 - **レスポンス**:
 
@@ -256,19 +261,28 @@
   "items": [
     {
       "id": 101,
-      "user": {
-        "id": 2,
-        "username": "脚トレ好き"
-      },
+      "source": "following",
       "didTrain": true,
       "trainedOn": "2026-05-26",
+      "startedAt": "2026-05-26T10:00:00+09:00",
+      "endedAt": "2026-05-26T11:00:00+09:00",
       "exerciseType": 3,
       "exerciseTypeLabel": "脚",
       "durationMinutes": 60,
-      "notePreview": "スクワット中心にやりました",
+      "note": "スクワット中心にやりました",
+      "visibility": "followers_and_recommended",
       "likeCount": 12,
       "likedByMe": false,
-      "createdAt": "2026-05-26T12:00:00+09:00"
+      "createdAt": "2026-05-26T12:00:00+09:00",
+      "author": {
+        "id": 2,
+        "username": "脚トレ好き",
+        "bio": "脚トレ中心に記録しています",
+        "trainingFrequencyDays": 3,
+        "tags": [
+          { "id": 2, "label": "大会勢" }
+        ]
+      }
     }
   ],
   "nextCursor": null

@@ -7,8 +7,118 @@ import { BottomNav } from "./components/BottomNav";
 import { CreateRecordScreen, PostDetailScreen, ProfileScreen, QuickStartScreen, TimelineScreen } from "./components/screens";
 import { availableTags, exerciseTypeIDs } from "./constants/workout";
 import { myProfile } from "./constants/mockData";
-import type { DetailedWorkoutInput, Profile, TimelinePost, TimelineTab, View, WorkoutRecord, WorkoutRecordResponse, WorkoutSession } from "./types/workout";
-import { formatWorkoutDuration, formatWorkoutLog, formatWorkoutPeriod, getLatestPostedAt, getWorkoutElapsed } from "./utils/workout";
+import type { DetailedWorkoutInput, Profile, ProfileTag, TimelinePost, TimelineTab, View, WorkoutRecord, WorkoutRecordResponse, WorkoutSession } from "./types/workout";
+import { formatWorkoutLog, getLatestPostedAt, getWorkoutElapsed } from "./utils/workout";
+
+type TimelineApiResponse = {
+  items: TimelineApiItem[];
+  nextCursor?: string | null;
+};
+
+type TimelineApiItem = {
+  id: number;
+  didTrain: boolean;
+  trainedOn: string;
+  startedAt?: string;
+  endedAt?: string;
+  exerciseType?: number;
+  exerciseTypeLabel?: string;
+  durationMinutes?: number;
+  note?: string;
+  likeCount: number;
+  likedByMe: boolean;
+  createdAt: string;
+  author: {
+    id: number;
+    username: string;
+    bio?: string;
+    trainingFrequencyDays?: number;
+    tags?: Array<{ id: number; label: string }>;
+  };
+};
+
+const toneByUserID = (userID: number): Profile["tone"] => {
+  const tones: Profile["tone"][] = ["blue", "green", "purple"];
+  return tones[Math.abs(userID) % tones.length];
+};
+
+const formatDateLabel = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric" }).format(date);
+};
+
+const formatPostTime = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("ja-JP", { hour: "2-digit", minute: "2-digit" }).format(date);
+};
+
+const formatTimelinePeriod = (post: TimelineApiItem) => {
+  if (post.startedAt && post.endedAt) {
+    return `${formatDateLabel(post.startedAt)} ${formatPostTime(post.startedAt)} - ${formatPostTime(post.endedAt)}`;
+  }
+  if (post.startedAt) {
+    return `${formatDateLabel(post.startedAt)} ${formatPostTime(post.startedAt)}`;
+  }
+  return formatDateLabel(post.trainedOn);
+};
+
+const formatPostedAt = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  const diffMs = Date.now() - date.getTime();
+  if (diffMs < 60_000) {
+    return "たった今";
+  }
+  const diffMinutes = Math.floor(diffMs / 60_000);
+  if (diffMinutes < 60) {
+    return `${diffMinutes}分前`;
+  }
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `${diffHours}時間前`;
+  }
+  return `${Math.floor(diffHours / 24)}日前`;
+};
+
+const mapTimelineItemToPost = (item: TimelineApiItem): TimelinePost => {
+  const exercise = item.exerciseTypeLabel || "トレーニング";
+  const duration = item.durationMinutes ? `${item.durationMinutes}分` : "時間未記録";
+  const note = item.note?.trim();
+
+  return {
+    id: item.id,
+    author: {
+      name: item.author.username,
+      handle: `@user-${item.author.id}`,
+      bio: item.author.bio || "プロフィール未設定",
+      tone: toneByUserID(item.author.id),
+      records: "-",
+      streak: "-",
+      achievements: "-",
+      logs: [],
+      tags: item.author.tags
+        ?.map((tag) => tag.label)
+        .filter((tag): tag is ProfileTag => availableTags.includes(tag as ProfileTag)),
+      inactivityDays: item.author.trainingFrequencyDays,
+    },
+    didTrain: item.didTrain,
+    exercise,
+    duration,
+    summary: note || (item.didTrain ? `${exercise}のトレーニングを記録しました。` : "今日は休みとして記録しました。"),
+    detail: note || (item.didTrain ? `${exercise}を${duration}実施しました。` : "トレーニングを実施しなかった日の記録です。"),
+    trainedAt: formatTimelinePeriod(item),
+    postedAt: formatPostedAt(item.createdAt),
+    likes: item.likedByMe ? Math.max(0, item.likeCount - 1) : item.likeCount,
+  };
+};
 
 export default function Home() {
   const [view, setView] = useState<View>("timeline");
@@ -17,8 +127,13 @@ export default function Home() {
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [selectedPost, setSelectedPost] = useState<TimelinePost | null>(null);
   const [likedPostIDs, setLikedPostIDs] = useState<Array<TimelinePost["id"]>>([]);
+  const [timelinePosts, setTimelinePosts] = useState<Record<TimelineTab, TimelinePost[]>>({
+    following: [],
+    recommended: [],
+  });
+  const [loadingTimeline, setLoadingTimeline] = useState(false);
+  const [timelineError, setTimelineError] = useState("");
   const [workoutSession, setWorkoutSession] = useState<WorkoutSession | null>(null);
-  const [completedPosts, setCompletedPosts] = useState<TimelinePost[]>([]);
   const [workoutRecords, setWorkoutRecords] = useState<WorkoutRecord[]>([]);
   const [loadingWorkoutRecords, setLoadingWorkoutRecords] = useState(false);
   const [workoutRecordsError, setWorkoutRecordsError] = useState("");
@@ -28,6 +143,50 @@ export default function Home() {
   const [detailedWorkoutError, setDetailedWorkoutError] = useState("");
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+  const loadTimeline = useCallback(async (source: TimelineTab) => {
+    const token = window.localStorage.getItem("group7pj_token");
+
+    if (!token) {
+      setTimelinePosts((posts) => ({ ...posts, [source]: [] }));
+      setTimelineError("");
+      return;
+    }
+
+    setLoadingTimeline(true);
+    setTimelineError("");
+
+    try {
+      const response = await fetch(`${apiUrl}/api/timeline?source=${source}&limit=20`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const payload = (await response.json().catch(() => null)) as TimelineApiResponse | { error?: string } | null;
+      if (!response.ok || !payload || !("items" in payload)) {
+        const message = payload && "error" in payload ? payload.error : undefined;
+        throw new Error(message || "タイムラインを読み込めませんでした。");
+      }
+
+      setTimelinePosts((posts) => ({
+        ...posts,
+        [source]: payload.items.map(mapTimelineItemToPost),
+      }));
+      setLikedPostIDs((ids) => {
+        const next = new Set(ids);
+        for (const item of payload.items) {
+          if (item.likedByMe) {
+            next.add(item.id);
+          }
+        }
+        return Array.from(next);
+      });
+    } catch (error) {
+      setTimelineError(error instanceof Error ? error.message : "タイムラインを読み込めませんでした。");
+    } finally {
+      setLoadingTimeline(false);
+    }
+  }, [apiUrl]);
 
   useEffect(() => {
     const token = window.localStorage.getItem("group7pj_token");
@@ -115,6 +274,10 @@ export default function Home() {
   useEffect(() => {
     void loadWorkoutRecords();
   }, [loadWorkoutRecords]);
+
+  useEffect(() => {
+    void loadTimeline(activeTab);
+  }, [activeTab, loadTimeline]);
 
   // プロフィール表示用に、サーバーから取得した記録数と最新ログを反映する。
   const ownProfile: Profile = {
@@ -231,24 +394,10 @@ export default function Home() {
         throw new Error(message || "トレーニング記録を保存できませんでした。");
       }
 
-      // API 反映後、タイムラインにも即時表示できるようローカル投稿を追加する。
-      setCompletedPosts((posts) => [{
-        id: `workout-${payload.id}`,
-        author: currentProfile,
-        didTrain: true,
-        exercise: "クイックスタート",
-        duration: formatWorkoutDuration(elapsedMs),
-        summary: `トレーニング完了！ ${formatWorkoutDuration(elapsedMs)}取り組みました。`,
-        detail: "クイックスタートから記録したトレーニングです。",
-        trainedAt: "たった今終了",
-        postedAt: "たった今",
-        likes: 0,
-      }, ...posts]);
       setCurrentProfile((profile) => ({ ...profile, lastPostedAt: new Date().toISOString() }));
       setWorkoutSession(null);
       await loadWorkoutRecords();
-      setActiveTab("following");
-      openTimeline();
+      setView("profile");
     } catch (error) {
       setWorkoutError(error instanceof Error ? error.message : "トレーニング記録を保存できませんでした。");
     } finally {
@@ -300,24 +449,9 @@ export default function Home() {
         throw new Error(message || "トレーニング記録を保存できませんでした。");
       }
 
-      const note = input.note.trim();
-      // 投稿成功後は、再取得を待たずに自分のタイムラインへ反映する。
-      setCompletedPosts((posts) => [{
-        id: `workout-${payload.id}`,
-        author: currentProfile,
-        didTrain: true,
-        exercise: input.exercise,
-        duration: `${input.durationMinutes}分`,
-        summary: note || `${input.bodyPart}のトレーニングを記録しました。`,
-        detail: note || `${input.bodyPart}を中心に${input.exercise}を実施しました。`,
-        trainedAt: formatWorkoutPeriod(input.startTime, input.durationMinutes),
-        postedAt: "たった今",
-        likes: 0,
-      }, ...posts]);
       await loadWorkoutRecords();
       setCurrentProfile((profile) => ({ ...profile, lastPostedAt: new Date().toISOString() }));
-      setActiveTab("following");
-      openTimeline();
+      setView("profile");
     } catch (error) {
       setDetailedWorkoutError(error instanceof Error ? error.message : "トレーニング記録を保存できませんでした。");
     } finally {
@@ -336,7 +470,9 @@ export default function Home() {
             onOpenDetail={openPostDetail}
             onToggleLike={toggleLike}
             likedPostIDs={likedPostIDs}
-            completedPosts={completedPosts}
+            timelinePosts={timelinePosts[activeTab]}
+            loadingTimeline={loadingTimeline}
+            timelineError={timelineError}
             onCreateRecord={openCreateRecord}
           />
         )}

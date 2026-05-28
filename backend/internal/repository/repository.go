@@ -43,6 +43,38 @@ type Repository interface {
 
 	// TrainingPost関連
 	CreateTrainingPost(post *model.TrainingPost) error
+	ListTimelinePosts(input TimelineQuery) ([]TimelinePostRow, error)
+}
+
+type TimelineQuery struct {
+	UserID      int
+	Source      string
+	Limit       int
+	CursorTime  *time.Time
+	CursorID    *int
+	CurrentDate time.Time
+}
+
+type TimelinePostRow struct {
+	ID                    int
+	Source                string
+	UserID                int
+	DidTrain              bool
+	TrainedOn             time.Time
+	StartedAt             *time.Time
+	EndedAt               *time.Time
+	ExerciseType          *int
+	DurationMinutes       *int
+	Note                  *string
+	Visibility            string
+	CreatedAt             time.Time
+	AuthorProfileID       int
+	AuthorUserID          int
+	AuthorUsername        string
+	AuthorBio             *string
+	TrainingFrequencyDays int
+	LikeCount             int
+	LikedByMe             bool
 }
 
 // MySQLRepository はMySQL用のRepository実装です
@@ -244,6 +276,61 @@ func (r *MySQLRepository) DeleteWorkoutRecord(id int) error {
 // CreateTrainingPost はトレーニング報告投稿を作成します
 func (r *MySQLRepository) CreateTrainingPost(post *model.TrainingPost) error {
 	return r.db.Create(post).Error
+}
+
+func (r *MySQLRepository) ListTimelinePosts(input TimelineQuery) ([]TimelinePostRow, error) {
+	query := r.db.Table("training_posts AS tp").
+		Select(`
+			tp.id,
+			tp.user_id,
+			tp.did_train,
+			tp.trained_on,
+			tp.started_at,
+			tp.ended_at,
+			tp.exercise_type,
+			tp.duration_minutes,
+			tp.note,
+			tp.visibility,
+			tp.created_at,
+			p.id AS author_profile_id,
+			p.user_id AS author_user_id,
+			p.username AS author_username,
+			p.bio AS author_bio,
+			p.training_frequency_days,
+			(SELECT COUNT(*) FROM post_likes AS pl WHERE pl.post_id = tp.id) AS like_count,
+			CASE WHEN my_like.id IS NULL THEN FALSE ELSE TRUE END AS liked_by_me
+		`).
+		Joins("JOIN profiles AS p ON p.user_id = tp.user_id AND p.deleted_at IS NULL").
+		Joins("LEFT JOIN post_likes AS my_like ON my_like.post_id = tp.id AND my_like.user_id = ?", input.UserID).
+		Where("tp.deleted_at IS NULL").
+		Where("tp.user_id <> ?", input.UserID)
+
+	switch input.Source {
+	case "following":
+		query = query.
+			Joins("JOIN follows AS f ON f.followee_user_id = tp.user_id AND f.follower_user_id = ?", input.UserID).
+			Where("tp.visibility IN ?", []string{"followers", "followers_and_recommended"})
+	case "recommended":
+		query = query.
+			Joins("JOIN recommendation_slots AS rs ON rs.recommended_user_id = tp.user_id AND rs.user_id = ? AND rs.slot_date = ? AND rs.status = 1", input.UserID, dateOnly(input.CurrentDate)).
+			Where("tp.visibility IN ?", []string{"recommended", "followers_and_recommended"})
+	default:
+		return nil, errors.New("invalid timeline source")
+	}
+
+	if input.CursorTime != nil && input.CursorID != nil {
+		query = query.Where("(tp.created_at < ? OR (tp.created_at = ? AND tp.id < ?))", input.CursorTime, input.CursorTime, *input.CursorID)
+	}
+
+	var rows []TimelinePostRow
+	err := query.
+		Order("tp.created_at DESC, tp.id DESC").
+		Limit(input.Limit).
+		Scan(&rows).Error
+	for i := range rows {
+		rows[i].Source = input.Source
+	}
+	return rows, err
 }
 
 func trainingPostFromWorkoutRecord(record *model.WorkoutRecord) *model.TrainingPost {

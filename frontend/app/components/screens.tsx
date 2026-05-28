@@ -4,7 +4,6 @@ import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import styles from "../page.module.css";
 import { availableTags, exercisesByBodyPart } from "../constants/workout";
-import { followingPosts, recommendedPosts } from "../constants/mockData";
 import type { BodyPart, Connection, DetailedWorkoutInput, Profile, ProfileTag, TimelinePost, TimelineTab, WorkoutSession } from "../types/workout";
 import { formatStopwatch, getDaysWithoutPost, getLocalDateTimeInputValue, getWorkoutElapsed } from "../utils/workout";
 import { ArrowIcon, ChevronIcon, HeartIcon, PauseIcon, PlayIcon, PlusIcon, StopIcon, UserIcon } from "./icons";
@@ -25,7 +24,9 @@ export function TimelineScreen({
   onOpenDetail,
   onToggleLike,
   likedPostIDs,
-  completedPosts,
+  timelinePosts,
+  loadingTimeline,
+  timelineError,
   onCreateRecord,
 }: {
   activeTab: TimelineTab;
@@ -34,11 +35,12 @@ export function TimelineScreen({
   onOpenDetail: (post: TimelinePost) => void;
   onToggleLike: (postID: TimelinePost["id"]) => void;
   likedPostIDs: Array<TimelinePost["id"]>;
-  completedPosts: TimelinePost[];
+  timelinePosts: TimelinePost[];
+  loadingTimeline: boolean;
+  timelineError: string;
   onCreateRecord: () => void;
 }) {
-  // おすすめタブは固定データ、フォロー中タブは投稿直後のローカル記録も先頭に混ぜる。
-  const posts = activeTab === "recommended" ? recommendedPosts : [...completedPosts, ...followingPosts];
+  const posts = timelinePosts;
 
   return (
     <>
@@ -59,6 +61,9 @@ export function TimelineScreen({
         </button>
       </header>
       <section className={styles.timeline} aria-label="投稿一覧">
+        {timelineError ? <p className={styles.emptyState}>{timelineError}</p> : null}
+        {loadingTimeline ? <p className={styles.emptyState}>投稿を読み込んでいます...</p> : null}
+        {!loadingTimeline && posts.length === 0 ? <p className={styles.emptyState}>表示できる投稿はまだありません。</p> : null}
         {posts.map((post) => (
           <article className={styles.post} key={post.id}>
             <button

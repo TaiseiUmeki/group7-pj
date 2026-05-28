@@ -43,6 +43,8 @@ func NewRouter(db *gorm.DB, jwtSecret string) http.Handler {
 	auth.GET("/users", h.GetAllUsers)
 	auth.GET("/users/get", h.GetUser)
 
+	auth.GET("/timeline", h.GetTimeline)
+
 	auth.GET("/workout-records", h.ListWorkoutRecords)
 	auth.POST("/workout-records", h.CreateWorkoutRecord)
 	auth.GET("/workout-records/latest", h.GetLatestWorkoutRecord)
