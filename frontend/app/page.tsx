@@ -2,6 +2,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { useCallback, useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import styles from "./page.module.css";
 import { BottomNav } from "./components/BottomNav";
 import { CreateRecordScreen, PostDetailScreen, ProfileScreen, QuickStartScreen, TimelineScreen } from "./components/screens";
@@ -32,6 +33,19 @@ type TimelineApiItem = {
     id: number;
     username: string;
     bio?: string;
+    trainingFrequencyDays?: number;
+    tags?: Array<{ id: number; label: string }>;
+  };
+};
+
+type UserProfileApiResponse = {
+  profile?: {
+    id: number;
+    user_id?: number;
+    userId?: number;
+    username: string;
+    bio?: string;
+    training_frequency_days?: number;
     trainingFrequencyDays?: number;
     tags?: Array<{ id: number; label: string }>;
   };
@@ -96,6 +110,7 @@ const mapTimelineItemToPost = (item: TimelineApiItem): TimelinePost => {
   return {
     id: item.id,
     author: {
+      userId: item.author.id,
       name: item.author.username,
       handle: `@user-${item.author.id}`,
       bio: item.author.bio || "プロフィール未設定",
@@ -120,8 +135,55 @@ const mapTimelineItemToPost = (item: TimelineApiItem): TimelinePost => {
   };
 };
 
+const mapApiProfileToProfile = (profile: NonNullable<UserProfileApiResponse["profile"]>): Profile => ({
+  userId: profile.userId ?? profile.user_id,
+  name: profile.username,
+  handle: `@user-${profile.userId ?? profile.user_id ?? profile.id}`,
+  bio: profile.bio || "プロフィール未設定",
+  tone: toneByUserID(profile.userId ?? profile.user_id ?? profile.id),
+  records: "-",
+  streak: "-",
+  achievements: "-",
+  logs: [],
+  tags: profile.tags
+    ?.map((tag) => tag.label)
+    .filter((tag): tag is ProfileTag => availableTags.includes(tag as ProfileTag)),
+  inactivityDays: profile.trainingFrequencyDays ?? profile.training_frequency_days,
+});
+
+const postIDFromPathname = (pathname: string) => {
+  const match = pathname.match(/^\/posts\/(\d+)$/);
+  return match ? Number(match[1]) : null;
+};
+
+const userIDFromPathname = (pathname: string) => {
+  const match = pathname.match(/^\/users\/(\d+)$/);
+  return match ? Number(match[1]) : null;
+};
+
+const viewFromPathname = (pathname: string): View => {
+  if (postIDFromPathname(pathname) !== null) {
+    return "postDetail";
+  }
+  if (userIDFromPathname(pathname) !== null) {
+    return "member";
+  }
+  switch (pathname) {
+    case "/profile":
+      return "profile";
+    case "/posts/new":
+      return "createRecord";
+    case "/quick-start":
+      return "quickStart";
+    default:
+      return "timeline";
+  }
+};
+
 export default function Home() {
-  const [view, setView] = useState<View>("timeline");
+  const pathname = usePathname();
+  const router = useRouter();
+  const [view, setView] = useState<View>(() => viewFromPathname(pathname));
   const [currentProfile, setCurrentProfile] = useState(myProfile);
   const [activeTab, setActiveTab] = useState<TimelineTab>("following");
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
@@ -133,6 +195,7 @@ export default function Home() {
   });
   const [loadingTimeline, setLoadingTimeline] = useState(false);
   const [timelineError, setTimelineError] = useState("");
+  const [detailError, setDetailError] = useState("");
   const [workoutSession, setWorkoutSession] = useState<WorkoutSession | null>(null);
   const [workoutRecords, setWorkoutRecords] = useState<WorkoutRecord[]>([]);
   const [loadingWorkoutRecords, setLoadingWorkoutRecords] = useState(false);
@@ -143,6 +206,90 @@ export default function Home() {
   const [detailedWorkoutError, setDetailedWorkoutError] = useState("");
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+  const loadPostDetail = useCallback(async (postID: number) => {
+    const token = window.localStorage.getItem("group7pj_token");
+    if (!token) {
+      setDetailError("ログイン情報を確認できません。もう一度ログインしてください。");
+      return;
+    }
+
+    setDetailError("");
+    try {
+      const response = await fetch(`${apiUrl}/api/posts/${postID}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const payload = (await response.json().catch(() => null)) as TimelineApiItem | { error?: string } | null;
+      if (!response.ok || !payload || !("id" in payload)) {
+        const message = payload && "error" in payload ? payload.error : undefined;
+        throw new Error(message || "投稿詳細を読み込めませんでした。");
+      }
+      setSelectedPost(mapTimelineItemToPost(payload));
+      setLikedPostIDs((ids) => (payload.likedByMe && !ids.includes(payload.id) ? [...ids, payload.id] : ids));
+    } catch (error) {
+      setSelectedPost(null);
+      setDetailError(error instanceof Error ? error.message : "投稿詳細を読み込めませんでした。");
+    }
+  }, [apiUrl]);
+
+  const loadMemberProfile = useCallback(async (userID: number) => {
+    const token = window.localStorage.getItem("group7pj_token");
+    if (!token) {
+      setDetailError("ログイン情報を確認できません。もう一度ログインしてください。");
+      return;
+    }
+
+    setDetailError("");
+    try {
+      const response = await fetch(`${apiUrl}/api/users/${userID}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const payload = (await response.json().catch(() => null)) as UserProfileApiResponse | { error?: string } | null;
+      if (!response.ok || !payload || !("profile" in payload) || !payload.profile) {
+        const message = payload && "error" in payload ? payload.error : undefined;
+        throw new Error(message || "プロフィールを読み込めませんでした。");
+      }
+      setSelectedProfile(mapApiProfileToProfile(payload.profile));
+    } catch (error) {
+      setSelectedProfile(null);
+      setDetailError(error instanceof Error ? error.message : "プロフィールを読み込めませんでした。");
+    }
+  }, [apiUrl]);
+
+  useEffect(() => {
+    setSelectedProfile(null);
+    setSelectedPost(null);
+    setDetailError("");
+    setView(viewFromPathname(pathname));
+  }, [pathname]);
+
+  useEffect(() => {
+    const postID = postIDFromPathname(pathname);
+    if (postID !== null) {
+      void loadPostDetail(postID);
+      return;
+    }
+
+    const userID = userIDFromPathname(pathname);
+    if (userID !== null) {
+      void loadMemberProfile(userID);
+    }
+  }, [loadMemberProfile, loadPostDetail, pathname]);
+
+  useEffect(() => {
+    if (view === "quickStart" && !workoutSession) {
+      setWorkoutError("");
+      setWorkoutSession({
+        startedAt: Date.now(),
+        activeSince: Date.now(),
+        elapsedBeforePause: 0,
+      });
+    }
+  }, [view, workoutSession]);
 
   const loadTimeline = useCallback(async (source: TimelineTab) => {
     const token = window.localStorage.getItem("group7pj_token");
@@ -298,16 +445,21 @@ export default function Home() {
     setSelectedPost(null);
     setActiveTab("following");
     setView("timeline");
+    router.push("/");
   };
 
   const openMemberProfile = (profile: Profile) => {
     setSelectedProfile(profile);
     setView("member");
+    if (profile.userId) {
+      router.push(`/users/${profile.userId}`);
+    }
   };
 
   const openPostDetail = (post: TimelinePost) => {
     setSelectedPost(post);
     setView("postDetail");
+    router.push(`/posts/${post.id}`);
   };
 
   const toggleLike = (postID: TimelinePost["id"]) => {
@@ -324,11 +476,13 @@ export default function Home() {
       elapsedBeforePause: 0,
     });
     setView("quickStart");
+    router.push("/quick-start");
   };
 
   const openCreateRecord = () => {
     setDetailedWorkoutError("");
     setView("createRecord");
+    router.push("/posts/new");
   };
 
   const toggleWorkoutPause = () => {
@@ -398,6 +552,7 @@ export default function Home() {
       setWorkoutSession(null);
       await loadWorkoutRecords();
       setView("profile");
+      router.push("/profile");
     } catch (error) {
       setWorkoutError(error instanceof Error ? error.message : "トレーニング記録を保存できませんでした。");
     } finally {
@@ -452,6 +607,7 @@ export default function Home() {
       await loadWorkoutRecords();
       setCurrentProfile((profile) => ({ ...profile, lastPostedAt: new Date().toISOString() }));
       setView("profile");
+      router.push("/profile");
     } catch (error) {
       setDetailedWorkoutError(error instanceof Error ? error.message : "トレーニング記録を保存できませんでした。");
     } finally {
@@ -485,6 +641,9 @@ export default function Home() {
             onToggleLike={() => toggleLike(selectedPost.id)}
           />
         )}
+        {view === "postDetail" && !selectedPost && (
+          <p className={styles.emptyState}>{detailError || "投稿詳細を読み込んでいます..."}</p>
+        )}
         {view === "quickStart" && workoutSession && (
           <QuickStartScreen
             session={workoutSession}
@@ -514,12 +673,18 @@ export default function Home() {
         {view === "member" && selectedProfile && (
           <ProfileScreen profile={selectedProfile} onBack={openTimeline} />
         )}
+        {view === "member" && !selectedProfile && (
+          <p className={styles.emptyState}>{detailError || "プロフィールを読み込んでいます..."}</p>
+        )}
 
         <BottomNav
           activeView={view}
           onTimeline={openTimeline}
           onQuickStart={startWorkout}
-          onProfile={() => setView("profile")}
+          onProfile={() => {
+            setView("profile");
+            router.push("/profile");
+          }}
         />
         <button className={styles.help} type="button" aria-label="ヘルプを開く">
           ?

@@ -268,6 +268,37 @@ func (f *fakeRepo) ListTimelinePosts(input repository.TimelineQuery) ([]reposito
 	return rows, nil
 }
 
+func (f *fakeRepo) GetTimelinePostByID(postID int, currentUserID int) (*repository.TimelinePostRow, error) {
+	post, ok := f.postsByID[postID]
+	if !ok || post.DeletedAt != nil {
+		return nil, repository.ErrTrainingPostNotFound
+	}
+	profile, err := f.GetProfileByUserID(post.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return &repository.TimelinePostRow{
+		ID:                    post.ID,
+		UserID:                post.UserID,
+		DidTrain:              post.DidTrain,
+		TrainedOn:             post.TrainedOn,
+		StartedAt:             post.StartedAt,
+		EndedAt:               post.EndedAt,
+		ExerciseType:          post.ExerciseType,
+		DurationMinutes:       post.DurationMinutes,
+		Note:                  post.Note,
+		Visibility:            post.Visibility,
+		CreatedAt:             post.CreatedAt,
+		AuthorProfileID:       profile.ID,
+		AuthorUserID:          profile.UserID,
+		AuthorUsername:        profile.Username,
+		AuthorBio:             profile.Bio,
+		TrainingFrequencyDays: profile.TrainingFrequencyDays,
+		LikeCount:             0,
+		LikedByMe:             false,
+	}, nil
+}
+
 func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 	t.Helper()
 
@@ -327,6 +358,7 @@ func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 	auth.GET("/auth/me", h.Me)
 	auth.GET("/me/profile", h.GetMyProfile)
 	auth.POST("/me/profile", h.SaveMyProfile)
+	auth.GET("/users/:userId", h.GetUserProfile)
 	auth.GET("/timeline", h.GetTimeline)
 	auth.POST("/workout-records", h.CreateWorkoutRecord)
 	auth.PUT("/workout-records/:id", h.UpdateWorkoutRecord)
@@ -334,6 +366,7 @@ func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 	auth.GET("/workout-records/latest", h.GetLatestWorkoutRecord)
 	auth.GET("/workout-records/:id", h.GetWorkoutRecord)
 	auth.POST("/posts", h.CreateTrainingPost)
+	auth.GET("/posts/:postId", h.GetTrainingPost)
 
 	return r, seedUser, "test-secret"
 }
@@ -508,6 +541,61 @@ func TestGetTimelineRejectsInvalidSource(t *testing.T) {
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400, got %d", w.Code)
+	}
+}
+
+func TestGetTrainingPost(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/posts/1", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		ID     int `json:"id"`
+		Author struct {
+			ID       int    `json:"id"`
+			Username string `json:"username"`
+		} `json:"author"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode post response: %v", err)
+	}
+	if resp.ID != 1 || resp.Author.Username != "Timeline Author" {
+		t.Fatalf("unexpected post response: %+v", resp)
+	}
+}
+
+func TestGetUserProfileByPath(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/users/2", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Profile struct {
+			UserID   int    `json:"user_id"`
+			Username string `json:"username"`
+		} `json:"profile"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode profile response: %v", err)
+	}
+	if resp.Profile.UserID != 2 || resp.Profile.Username != "Timeline Author" {
+		t.Fatalf("unexpected profile response: %+v", resp)
 	}
 }
 

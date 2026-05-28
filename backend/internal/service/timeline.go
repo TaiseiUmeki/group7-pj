@@ -133,6 +133,23 @@ func (s *Service) GetTimeline(userID int, input TimelineInput) (*TimelineRespons
 	}, nil
 }
 
+func (s *Service) GetTimelinePost(postID int, currentUserID int) (*TimelinePostView, error) {
+	row, err := s.repo.GetTimelinePostByID(postID, currentUserID)
+	if err != nil {
+		return nil, err
+	}
+	tagIDs, err := s.repo.GetProfileTagIDs(row.AuthorProfileID)
+	if err != nil {
+		return nil, err
+	}
+	post := buildTimelinePostView(*row, buildProfileTagViews(tagIDs))
+	return &post, nil
+}
+
+func (s *Service) GetUserProfile(userID int) (*ProfileView, error) {
+	return s.GetProfile(userID)
+}
+
 func buildTimelinePostView(row repository.TimelinePostRow, tags []ProfileTagView) TimelinePostView {
 	var startedAt *string
 	if row.StartedAt != nil {

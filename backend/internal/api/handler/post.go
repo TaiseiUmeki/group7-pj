@@ -2,7 +2,9 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 
+	"backend/internal/repository"
 	"backend/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -26,6 +28,33 @@ type TrainingPostRequest struct {
 	DurationMinutesSnake *int    `json:"duration_minutes"`
 	Note                 *string `json:"note"`
 	Visibility           string  `json:"visibility"`
+}
+
+// GetTrainingPost は投稿詳細を取得します。
+func (h *Handler) GetTrainingPost(c *gin.Context) {
+	user, err := h.currentUserFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	postID, err := strconv.Atoi(c.Param("postId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post id"})
+		return
+	}
+
+	post, err := h.service.GetTimelinePost(postID, user.ID)
+	if err != nil {
+		if err == repository.ErrTrainingPostNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, post)
 }
 
 // CreateTrainingPost はトレーニング報告投稿を作成します。
