@@ -58,6 +58,23 @@ func (h *Handler) GetUser(c *gin.Context) {
 	c.JSON(http.StatusOK, user)
 }
 
+// GetUserProfile は指定ユーザーのプロフィール情報を取得します。
+func (h *Handler) GetUserProfile(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("userId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	profile, err := h.service.GetUserProfile(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"profile": profile})
+}
+
 // Login はメールアドレスとパスワードでJWTを発行します
 func (h *Handler) Login(c *gin.Context) {
 	var req struct {

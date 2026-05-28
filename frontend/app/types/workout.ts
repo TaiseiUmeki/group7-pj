@@ -29,6 +29,7 @@ export type Connection = {
 export type ProfileTag = (typeof availableTags)[number];
 
 export type Profile = {
+  userId?: number;
   name: string;
   handle: string;
   bio: string;
@@ -86,4 +87,3 @@ export type DetailedWorkoutInput = {
   durationMinutes: number;
   note: string;
 };
-

@@ -18,6 +18,8 @@ var ErrWorkoutRecordNotFound = errors.New("workout record not found")
 // ErrProfileNotFound はプロフィールが見つからない場合のエラーです
 var ErrProfileNotFound = errors.New("profile not found")
 
+var ErrTrainingPostNotFound = errors.New("training post not found")
+
 // Repository はデータベースアクセス層のインターフェースです
 type Repository interface {
 	// User関連
@@ -44,6 +46,7 @@ type Repository interface {
 	// TrainingPost関連
 	CreateTrainingPost(post *model.TrainingPost) error
 	ListTimelinePosts(input TimelineQuery) ([]TimelinePostRow, error)
+	GetTimelinePostByID(postID int, currentUserID int) (*TimelinePostRow, error)
 }
 
 type TimelineQuery struct {
@@ -278,31 +281,22 @@ func (r *MySQLRepository) CreateTrainingPost(post *model.TrainingPost) error {
 	return r.db.Create(post).Error
 }
 
+func (r *MySQLRepository) GetTimelinePostByID(postID int, currentUserID int) (*TimelinePostRow, error) {
+	var row TimelinePostRow
+	err := r.timelinePostBaseQuery(currentUserID).
+		Where("tp.id = ?", postID).
+		First(&row).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrTrainingPostNotFound
+		}
+		return nil, err
+	}
+	return &row, nil
+}
+
 func (r *MySQLRepository) ListTimelinePosts(input TimelineQuery) ([]TimelinePostRow, error) {
-	query := r.db.Table("training_posts AS tp").
-		Select(`
-			tp.id,
-			tp.user_id,
-			tp.did_train,
-			tp.trained_on,
-			tp.started_at,
-			tp.ended_at,
-			tp.exercise_type,
-			tp.duration_minutes,
-			tp.note,
-			tp.visibility,
-			tp.created_at,
-			p.id AS author_profile_id,
-			p.user_id AS author_user_id,
-			p.username AS author_username,
-			p.bio AS author_bio,
-			p.training_frequency_days,
-			(SELECT COUNT(*) FROM post_likes AS pl WHERE pl.post_id = tp.id) AS like_count,
-			CASE WHEN my_like.id IS NULL THEN FALSE ELSE TRUE END AS liked_by_me
-		`).
-		Joins("JOIN profiles AS p ON p.user_id = tp.user_id AND p.deleted_at IS NULL").
-		Joins("LEFT JOIN post_likes AS my_like ON my_like.post_id = tp.id AND my_like.user_id = ?", input.UserID).
-		Where("tp.deleted_at IS NULL").
+	query := r.timelinePostBaseQuery(input.UserID).
 		Where("tp.user_id <> ?", input.UserID)
 
 	switch input.Source {
@@ -326,11 +320,38 @@ func (r *MySQLRepository) ListTimelinePosts(input TimelineQuery) ([]TimelinePost
 	err := query.
 		Order("tp.created_at DESC, tp.id DESC").
 		Limit(input.Limit).
-		Scan(&rows).Error
+		Find(&rows).Error
 	for i := range rows {
 		rows[i].Source = input.Source
 	}
 	return rows, err
+}
+
+func (r *MySQLRepository) timelinePostBaseQuery(currentUserID int) *gorm.DB {
+	return r.db.Table("training_posts AS tp").
+		Select(`
+			tp.id,
+			tp.user_id,
+			tp.did_train,
+			tp.trained_on,
+			tp.started_at,
+			tp.ended_at,
+			tp.exercise_type,
+			tp.duration_minutes,
+			tp.note,
+			tp.visibility,
+			tp.created_at,
+			p.id AS author_profile_id,
+			p.user_id AS author_user_id,
+			p.username AS author_username,
+			p.bio AS author_bio,
+			p.training_frequency_days,
+			(SELECT COUNT(*) FROM post_likes AS pl WHERE pl.post_id = tp.id) AS like_count,
+			CASE WHEN my_like.id IS NULL THEN FALSE ELSE TRUE END AS liked_by_me
+		`).
+		Joins("JOIN profiles AS p ON p.user_id = tp.user_id AND p.deleted_at IS NULL").
+		Joins("LEFT JOIN post_likes AS my_like ON my_like.post_id = tp.id AND my_like.user_id = ?", currentUserID).
+		Where("tp.deleted_at IS NULL")
 }
 
 func trainingPostFromWorkoutRecord(record *model.WorkoutRecord) *model.TrainingPost {
