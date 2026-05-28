@@ -1122,8 +1122,8 @@
   box-shadow: 0 0 0 3px rgba(48, 108, 240, 0.2);
 }
 
-.nav .activeNav {
-  color: #306cf0;
+.nav > button.activeNav {
+  color: #326cf0;
 }
 
 .quickButton {
