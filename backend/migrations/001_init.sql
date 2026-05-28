@@ -2,7 +2,6 @@
 
 CREATE TABLE IF NOT EXISTS users (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(255) NOT NULL DEFAULT '',
   email VARCHAR(255) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -17,15 +16,24 @@ CREATE TABLE IF NOT EXISTS profiles (
   user_id BIGINT NOT NULL,
   username VARCHAR(80) NOT NULL,
   bio TEXT NULL,
-  focus_type INT NULL,
   training_frequency_days INT NOT NULL DEFAULT 3,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted_at DATETIME NULL,
   UNIQUE KEY uk_profiles_user_id (user_id),
-  KEY idx_profiles_focus_type (focus_type),
   KEY idx_profiles_deleted_at (deleted_at),
   CONSTRAINT fk_profiles_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS profile_tags (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  profile_id BIGINT NOT NULL,
+  tag_id INT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_profile_tags_pair (profile_id, tag_id),
+  KEY idx_profile_tags_profile (profile_id),
+  KEY idx_profile_tags_tag_id (tag_id),
+  CONSTRAINT fk_profile_tags_profile FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS training_sessions (

@@ -6,9 +6,9 @@ import (
 	"backend/internal/model"
 	"backend/internal/repository"
 	"backend/internal/service"
-	"github.com/gin-gonic/gin"
 	"bytes"
 	"encoding/json"
+	"github.com/gin-gonic/gin"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -33,10 +33,14 @@ func TestHealthCheck(t *testing.T) {
 }
 
 type fakeRepo struct {
-	usersByID    map[int]*model.User
-	usersByEmail map[string]*model.User
-	recordsByID  map[int]*model.WorkoutRecord
-	nextRecordID int
+	usersByID     map[int]*model.User
+	usersByEmail  map[string]*model.User
+	profilesByID  map[int]*model.Profile
+	profileTagIDs map[int][]int
+	nextUserID    int
+	nextProfileID int
+	recordsByID   map[int]*model.WorkoutRecord
+	nextRecordID  int
 }
 
 func newFakeRepo(seedUser *model.User) *fakeRepo {
@@ -48,10 +52,14 @@ func newFakeRepo(seedUser *model.User) *fakeRepo {
 	}
 
 	return &fakeRepo{
-		usersByID:    usersByID,
-		usersByEmail: usersByEmail,
-		recordsByID:  map[int]*model.WorkoutRecord{},
-		nextRecordID: 1,
+		usersByID:     usersByID,
+		usersByEmail:  usersByEmail,
+		profilesByID:  map[int]*model.Profile{},
+		profileTagIDs: map[int][]int{},
+		nextUserID:    len(usersByID) + 1,
+		nextProfileID: 1,
+		recordsByID:   map[int]*model.WorkoutRecord{},
+		nextRecordID:  1,
 	}
 }
 
@@ -80,8 +88,46 @@ func (f *fakeRepo) GetAllUsers() ([]*model.User, error) {
 }
 
 func (f *fakeRepo) CreateUser(user *model.User) error {
+	if user.ID == 0 {
+		user.ID = f.nextUserID
+		f.nextUserID++
+	}
 	f.usersByID[user.ID] = user
 	f.usersByEmail[strings.ToLower(user.Email)] = user
+	return nil
+}
+
+func (f *fakeRepo) GetProfileByUserID(userID int) (*model.Profile, error) {
+	for _, profile := range f.profilesByID {
+		if profile.UserID == userID {
+			return profile, nil
+		}
+	}
+	return nil, repository.ErrProfileNotFound
+}
+
+func (f *fakeRepo) GetProfileTagIDs(profileID int) ([]int, error) {
+	tagIDs := f.profileTagIDs[profileID]
+	copied := append([]int(nil), tagIDs...)
+	return copied, nil
+}
+
+func (f *fakeRepo) CreateProfile(profile *model.Profile) error {
+	if profile.ID == 0 {
+		profile.ID = f.nextProfileID
+		f.nextProfileID++
+	}
+	f.profilesByID[profile.ID] = profile
+	return nil
+}
+
+func (f *fakeRepo) ReplaceProfileTags(profileID int, tagIDs []int) error {
+	f.profileTagIDs[profileID] = append([]int(nil), tagIDs...)
+	return nil
+}
+
+func (f *fakeRepo) UpdateProfile(profile *model.Profile) error {
+	f.profilesByID[profile.ID] = profile
 	return nil
 }
 
@@ -166,7 +212,6 @@ func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 
 	seedUser := &model.User{
 		ID:           1,
-		Name:         "Demo User",
 		Email:        "seed@example.com",
 		PasswordHash: string(hash),
 	}
@@ -181,6 +226,8 @@ func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 	r.POST("/api/auth/login", h.Login)
 	r.POST("/api/auth/signup", h.Signup)
 	r.GET("/api/auth/me", h.Me)
+	r.GET("/api/me/profile", h.GetMyProfile)
+	r.POST("/api/me/profile", h.SaveMyProfile)
 	r.POST("/api/workout-records", h.CreateWorkoutRecord)
 	r.PUT("/api/workout-records/:id", h.UpdateWorkoutRecord)
 	r.GET("/api/workout-records", h.ListWorkoutRecords)
@@ -228,8 +275,8 @@ func TestLoginSuccess(t *testing.T) {
 	}
 
 	var resp struct {
-		Token string       `json:"token"`
-		User  *model.User  `json:"user"`
+		Token string      `json:"token"`
+		User  *model.User `json:"user"`
 	}
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
@@ -260,7 +307,7 @@ func TestLoginFailure(t *testing.T) {
 func TestSignupSuccess(t *testing.T) {
 	router, _, _ := newTestRouter(t)
 
-	body := bytes.NewBufferString(`{"username":"New User","email":"new@example.com","password":"secret"}`)
+	body := bytes.NewBufferString(`{"email":"new@example.com","password":"secret"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/signup", body)
 	w := httptest.NewRecorder()
 
@@ -282,13 +329,75 @@ func TestSignupDuplicateEmail(t *testing.T) {
 	router, seedUser, _ := newTestRouter(t)
 
 	// try to signup with same email as seedUser
-	body := bytes.NewBufferString(`{"username":"Dup","email":"` + seedUser.Email + `","password":"secret"}`)
+	body := bytes.NewBufferString(`{"email":"` + seedUser.Email + `","password":"secret"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/signup", body)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400 for duplicate email, got %d", w.Code)
+	}
+}
+
+func TestGetMyProfileReturnsIncompleteWhenMissing(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/me/profile", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		ProfileCompleted bool `json:"profileCompleted"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode profile response: %v", err)
+	}
+	if resp.ProfileCompleted {
+		t.Fatal("expected profileCompleted false")
+	}
+}
+
+func TestSaveMyProfileCreatesProfileWithUsername(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	body := bytes.NewBufferString(`{"username":"Profile User","bio":"hello","tagIds":[2,5],"trainingFrequencyDays":3}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/me/profile", body)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		ProfileCompleted bool `json:"profileCompleted"`
+		Profile          struct {
+			Username string `json:"username"`
+			Tags     []struct {
+				ID    int    `json:"id"`
+				Label string `json:"label"`
+			} `json:"tags"`
+		} `json:"profile"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode profile response: %v", err)
+	}
+	if !resp.ProfileCompleted {
+		t.Fatalf("expected completed profile, got %+v", resp)
+	}
+	if resp.Profile.Username != "Profile User" {
+		t.Fatalf("expected username Profile User, got %s", resp.Profile.Username)
+	}
+	if len(resp.Profile.Tags) != 2 || resp.Profile.Tags[0].ID != 2 || resp.Profile.Tags[1].ID != 5 {
+		t.Fatalf("expected tag ids [2 5], got %+v", resp.Profile.Tags)
 	}
 }
 

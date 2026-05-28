@@ -15,6 +15,9 @@ var ErrUserNotFound = errors.New("user not found")
 // ErrWorkoutRecordNotFound は運動記録が見つからない場合のエラーです
 var ErrWorkoutRecordNotFound = errors.New("workout record not found")
 
+// ErrProfileNotFound はプロフィールが見つからない場合のエラーです
+var ErrProfileNotFound = errors.New("profile not found")
+
 // Repository はデータベースアクセス層のインターフェースです
 type Repository interface {
 	// User関連
@@ -22,6 +25,11 @@ type Repository interface {
 	GetUserByEmail(email string) (*model.User, error)
 	GetAllUsers() ([]*model.User, error)
 	CreateUser(user *model.User) error
+	GetProfileByUserID(userID int) (*model.Profile, error)
+	GetProfileTagIDs(profileID int) ([]int, error)
+	CreateProfile(profile *model.Profile) error
+	ReplaceProfileTags(profileID int, tagIDs []int) error
+	UpdateProfile(profile *model.Profile) error
 	UpdateUser(user *model.User) error
 	DeleteUser(id int) error
 
@@ -85,6 +93,62 @@ func (r *MySQLRepository) GetAllUsers() ([]*model.User, error) {
 // CreateUser はユーザーを作成します
 func (r *MySQLRepository) CreateUser(user *model.User) error {
 	return r.db.Create(user).Error
+}
+
+// GetProfileByUserID はユーザーIDからプロフィールを取得します
+func (r *MySQLRepository) GetProfileByUserID(userID int) (*model.Profile, error) {
+	var profile model.Profile
+	if err := r.db.Where("user_id = ? AND deleted_at IS NULL", userID).First(&profile).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProfileNotFound
+		}
+		return nil, err
+	}
+	return &profile, nil
+}
+
+// GetProfileTagIDs はプロフィールに設定されたタグIDを取得します
+func (r *MySQLRepository) GetProfileTagIDs(profileID int) ([]int, error) {
+	var profileTags []model.ProfileTag
+	if err := r.db.Where("profile_id = ?", profileID).Order("tag_id ASC").Find(&profileTags).Error; err != nil {
+		return nil, err
+	}
+
+	tagIDs := make([]int, 0, len(profileTags))
+	for _, profileTag := range profileTags {
+		tagIDs = append(tagIDs, profileTag.TagID)
+	}
+	return tagIDs, nil
+}
+
+// CreateProfile はプロフィールを作成します
+func (r *MySQLRepository) CreateProfile(profile *model.Profile) error {
+	return r.db.Create(profile).Error
+}
+
+// ReplaceProfileTags はプロフィールのタグを指定ID群で置き換えます
+func (r *MySQLRepository) ReplaceProfileTags(profileID int, tagIDs []int) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("profile_id = ?", profileID).Delete(&model.ProfileTag{}).Error; err != nil {
+			return err
+		}
+
+		for _, tagID := range tagIDs {
+			profileTag := model.ProfileTag{
+				ProfileID: profileID,
+				TagID:     tagID,
+			}
+			if err := tx.Create(&profileTag).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// UpdateProfile はプロフィールを更新します
+func (r *MySQLRepository) UpdateProfile(profile *model.Profile) error {
+	return r.db.Save(profile).Error
 }
 
 // UpdateUser はユーザーを更新します

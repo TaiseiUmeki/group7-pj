@@ -47,10 +47,10 @@
   font-weight: 700;
 }
 
-.field input {
+.field input,
+.field select,
+.field textarea {
   width: 100%;
-  min-height: 50px;
-  padding: 0 14px;
   border: 1px solid #dce3ed;
   border-radius: 11px;
   background: #fff;
@@ -61,12 +61,27 @@
   outline: none;
 }
 
-.field input::placeholder {
+.field input,
+.field select {
+  min-height: 50px;
+  padding: 0 14px;
+}
+
+.field textarea {
+  min-height: 98px;
+  padding: 14px;
+  resize: vertical;
+}
+
+.field input::placeholder,
+.field textarea::placeholder {
   color: #a0aab8;
   font-weight: 400;
 }
 
-.field input:focus {
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
   border-color: #316cf0;
   box-shadow: 0 0 0 3px rgba(49, 108, 240, 0.12);
 }
@@ -74,6 +89,64 @@
 .error {
   margin: 0;
   color: #bd352d;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.tagSelector {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.tagSelector legend {
+  margin-bottom: 9px;
+  color: #25344d;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.tagSelector div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tagSelector button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid #dce3ed;
+  border-radius: 17px;
+  background: #fff;
+  color: #42526b;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tagSelector .selectedTag {
+  border-color: #316cf0;
+  background: #eaf0ff;
+  color: #2455c7;
+}
+
+.daysField {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.daysField input {
+  width: 96px;
+  flex: 0 0 96px;
+}
+
+.daysField > span {
+  flex: 0 0 auto;
+  color: #647287;
   font-size: 14px;
   font-weight: 700;
 }

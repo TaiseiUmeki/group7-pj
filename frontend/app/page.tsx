@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import styles from "./page.module.css";
 import { BottomNav } from "./components/BottomNav";
 import { CreateRecordScreen, PostDetailScreen, ProfileScreen, QuickStartScreen, TimelineScreen } from "./components/screens";
-import { exerciseTypeIDs } from "./constants/workout";
+import { availableTags, exerciseTypeIDs } from "./constants/workout";
 import { myProfile } from "./constants/mockData";
 import type { DetailedWorkoutInput, Profile, TimelinePost, TimelineTab, View, WorkoutRecord, WorkoutRecordResponse, WorkoutSession } from "./types/workout";
 import { formatWorkoutDuration, formatWorkoutLog, formatWorkoutPeriod, getLatestPostedAt, getWorkoutElapsed } from "./utils/workout";
@@ -28,6 +28,55 @@ export default function Home() {
   const [detailedWorkoutError, setDetailedWorkoutError] = useState("");
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+  useEffect(() => {
+    const token = window.localStorage.getItem("group7pj_token");
+    if (!token) {
+      return;
+    }
+
+    const loadProfile = async () => {
+      try {
+        const response = await fetch(`${apiUrl}/api/me/profile`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const payload = (await response.json().catch(() => null)) as {
+          profileCompleted?: boolean;
+          profile?: {
+            username?: string;
+            bio?: string;
+            training_frequency_days?: number;
+            tags?: Array<{ id: number; label: string }>;
+          } | null;
+        } | null;
+
+        if (!response.ok || !payload) {
+          return;
+        }
+        if (!payload.profileCompleted) {
+          window.location.href = "/profile-setup";
+          return;
+        }
+        if (payload.profile) {
+          setCurrentProfile((profile) => ({
+            ...profile,
+            name: payload.profile?.username || profile.name,
+            bio: payload.profile?.bio || profile.bio,
+            inactivityDays: payload.profile?.training_frequency_days ?? profile.inactivityDays,
+            tags: payload.profile?.tags
+              ?.map((tag) => tag.label)
+              .filter((tag): tag is (typeof availableTags)[number] => availableTags.includes(tag as (typeof availableTags)[number])) ?? profile.tags,
+          }));
+        }
+      } catch {
+        // プロフィール取得に失敗しても、既存の画面表示は妨げない。
+      }
+    };
+
+    void loadProfile();
+  }, [apiUrl]);
 
   // ログイン済みユーザーのトレーニング記録をサーバーから取得する。
   const loadWorkoutRecords = useCallback(async () => {

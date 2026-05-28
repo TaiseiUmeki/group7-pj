@@ -136,7 +136,6 @@ func seedLoginUser(db *gorm.DB) error {
 	}
 
 	user := &model.User{
-		Name:         seedUserName,
 		Email:        seedUserEmail,
 		PasswordHash: string(hash),
 	}
