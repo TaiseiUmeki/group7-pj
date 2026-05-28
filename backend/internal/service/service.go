@@ -18,6 +18,31 @@ type Service struct {
 	jwtSecret string
 }
 
+type ProfileTagView struct {
+	ID    int    `json:"id"`
+	Label string `json:"label"`
+}
+
+type ProfileView struct {
+	ID                    int              `json:"id"`
+	UserID                int              `json:"user_id"`
+	Username              string           `json:"username"`
+	Bio                   *string          `json:"bio,omitempty"`
+	TrainingFrequencyDays int              `json:"training_frequency_days"`
+	Tags                  []ProfileTagView `json:"tags"`
+}
+
+var profileTagLabels = map[int]string{
+	1: "やる気",
+	2: "大会勢",
+	3: "健康維持",
+	4: "ダイエット",
+	5: "筋肥大",
+	6: "パワーリフティング",
+	7: "ボディメイク",
+	8: "初心者",
+}
+
 // NewService はサービスを初期化します
 func NewService(repo repository.Repository, jwtSecret string) *Service {
 	return &Service{
@@ -95,12 +120,16 @@ func (s *Service) Register(email, password string) (*model.User, error) {
 }
 
 // GetProfile はユーザーのプロフィールを取得します。
-func (s *Service) GetProfile(userID int) (*model.Profile, error) {
-	return s.repo.GetProfileByUserID(userID)
+func (s *Service) GetProfile(userID int) (*ProfileView, error) {
+	profile, err := s.repo.GetProfileByUserID(userID)
+	if err != nil {
+		return nil, err
+	}
+	return s.buildProfileView(profile)
 }
 
 // SaveProfile はプロフィールを作成または更新します。
-func (s *Service) SaveProfile(userID int, username string, bio *string, focusType *int, trainingFrequencyDays int) (*model.Profile, error) {
+func (s *Service) SaveProfile(userID int, username string, bio *string, tagIDs []int, trainingFrequencyDays int) (*ProfileView, error) {
 	normalizedUsername := strings.TrimSpace(username)
 	if normalizedUsername == "" {
 		return nil, fmt.Errorf("username is required")
@@ -116,6 +145,10 @@ func (s *Service) SaveProfile(userID int, username string, bio *string, focusTyp
 			normalizedBio = &trimmedBio
 		}
 	}
+	normalizedTagIDs, err := normalizeProfileTagIDs(tagIDs)
+	if err != nil {
+		return nil, err
+	}
 
 	profile, err := s.repo.GetProfileByUserID(userID)
 	if err != nil {
@@ -129,20 +162,22 @@ func (s *Service) SaveProfile(userID int, username string, bio *string, focusTyp
 
 	profile.Username = normalizedUsername
 	profile.Bio = normalizedBio
-	profile.FocusType = focusType
 	profile.TrainingFrequencyDays = trainingFrequencyDays
 
 	if profile.ID == 0 {
 		if err := s.repo.CreateProfile(profile); err != nil {
 			return nil, err
 		}
-		return profile, nil
+	} else {
+		if err := s.repo.UpdateProfile(profile); err != nil {
+			return nil, err
+		}
 	}
 
-	if err := s.repo.UpdateProfile(profile); err != nil {
+	if err := s.repo.ReplaceProfileTags(profile.ID, normalizedTagIDs); err != nil {
 		return nil, err
 	}
-	return profile, nil
+	return s.buildProfileView(profile)
 }
 
 // GetCurrentUser はJWTから現在のユーザーを取得します。
@@ -177,6 +212,50 @@ type authClaims struct {
 	UserID int    `json:"user_id"`
 	Email  string `json:"email"`
 	jwt.RegisteredClaims
+}
+
+func (s *Service) buildProfileView(profile *model.Profile) (*ProfileView, error) {
+	tagIDs, err := s.repo.GetProfileTagIDs(profile.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ProfileView{
+		ID:                    profile.ID,
+		UserID:                profile.UserID,
+		Username:              profile.Username,
+		Bio:                   profile.Bio,
+		TrainingFrequencyDays: profile.TrainingFrequencyDays,
+		Tags:                  buildProfileTagViews(tagIDs),
+	}, nil
+}
+
+func normalizeProfileTagIDs(tagIDs []int) ([]int, error) {
+	seen := map[int]bool{}
+	normalized := make([]int, 0, len(tagIDs))
+	for _, tagID := range tagIDs {
+		if _, ok := profileTagLabels[tagID]; !ok {
+			return nil, fmt.Errorf("invalid tag id")
+		}
+		if seen[tagID] {
+			continue
+		}
+		seen[tagID] = true
+		normalized = append(normalized, tagID)
+	}
+	return normalized, nil
+}
+
+func buildProfileTagViews(tagIDs []int) []ProfileTagView {
+	tags := make([]ProfileTagView, 0, len(tagIDs))
+	for _, tagID := range tagIDs {
+		label, ok := profileTagLabels[tagID]
+		if !ok {
+			continue
+		}
+		tags = append(tags, ProfileTagView{ID: tagID, Label: label})
+	}
+	return tags
 }
 
 // ここにビジネスロジックを追加します

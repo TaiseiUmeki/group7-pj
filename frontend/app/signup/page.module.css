@@ -93,6 +93,64 @@
   font-weight: 700;
 }
 
+.tagSelector {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.tagSelector legend {
+  margin-bottom: 9px;
+  color: #25344d;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.tagSelector div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tagSelector button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid #dce3ed;
+  border-radius: 17px;
+  background: #fff;
+  color: #42526b;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tagSelector .selectedTag {
+  border-color: #316cf0;
+  background: #eaf0ff;
+  color: #2455c7;
+}
+
+.daysField {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.daysField input {
+  width: 96px;
+  flex: 0 0 96px;
+}
+
+.daysField > span {
+  flex: 0 0 auto;
+  color: #647287;
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .submitButton {
   width: 100%;
   min-height: 52px;

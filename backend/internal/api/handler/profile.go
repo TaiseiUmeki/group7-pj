@@ -12,7 +12,7 @@ import (
 type profileRequest struct {
 	Username              string  `json:"username"`
 	Bio                   *string `json:"bio"`
-	FocusType             *int    `json:"focusType"`
+	TagIDs                []int   `json:"tagIds"`
 	TrainingFrequencyDays int     `json:"trainingFrequencyDays"`
 }
 
@@ -51,7 +51,7 @@ func (h *Handler) SaveMyProfile(c *gin.Context) {
 		return
 	}
 
-	profile, err := h.service.SaveProfile(user.ID, req.Username, req.Bio, req.FocusType, req.TrainingFrequencyDays)
+	profile, err := h.service.SaveProfile(user.ID, req.Username, req.Bio, req.TagIDs, req.TrainingFrequencyDays)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

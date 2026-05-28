@@ -36,6 +36,7 @@ type fakeRepo struct {
 	usersByID     map[int]*model.User
 	usersByEmail  map[string]*model.User
 	profilesByID  map[int]*model.Profile
+	profileTagIDs map[int][]int
 	nextUserID    int
 	nextProfileID int
 	recordsByID   map[int]*model.WorkoutRecord
@@ -54,6 +55,7 @@ func newFakeRepo(seedUser *model.User) *fakeRepo {
 		usersByID:     usersByID,
 		usersByEmail:  usersByEmail,
 		profilesByID:  map[int]*model.Profile{},
+		profileTagIDs: map[int][]int{},
 		nextUserID:    len(usersByID) + 1,
 		nextProfileID: 1,
 		recordsByID:   map[int]*model.WorkoutRecord{},
@@ -104,12 +106,23 @@ func (f *fakeRepo) GetProfileByUserID(userID int) (*model.Profile, error) {
 	return nil, repository.ErrProfileNotFound
 }
 
+func (f *fakeRepo) GetProfileTagIDs(profileID int) ([]int, error) {
+	tagIDs := f.profileTagIDs[profileID]
+	copied := append([]int(nil), tagIDs...)
+	return copied, nil
+}
+
 func (f *fakeRepo) CreateProfile(profile *model.Profile) error {
 	if profile.ID == 0 {
 		profile.ID = f.nextProfileID
 		f.nextProfileID++
 	}
 	f.profilesByID[profile.ID] = profile
+	return nil
+}
+
+func (f *fakeRepo) ReplaceProfileTags(profileID int, tagIDs []int) error {
+	f.profileTagIDs[profileID] = append([]int(nil), tagIDs...)
 	return nil
 }
 
@@ -354,7 +367,7 @@ func TestSaveMyProfileCreatesProfileWithUsername(t *testing.T) {
 	router, _, _ := newTestRouter(t)
 	token := loginToken(t, router)
 
-	body := bytes.NewBufferString(`{"username":"Profile User","bio":"hello","focusType":2,"trainingFrequencyDays":3}`)
+	body := bytes.NewBufferString(`{"username":"Profile User","bio":"hello","tagIds":[2,5],"trainingFrequencyDays":3}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/me/profile", body)
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
@@ -365,17 +378,26 @@ func TestSaveMyProfileCreatesProfileWithUsername(t *testing.T) {
 	}
 
 	var resp struct {
-		ProfileCompleted bool           `json:"profileCompleted"`
-		Profile          *model.Profile `json:"profile"`
+		ProfileCompleted bool `json:"profileCompleted"`
+		Profile          struct {
+			Username string `json:"username"`
+			Tags     []struct {
+				ID    int    `json:"id"`
+				Label string `json:"label"`
+			} `json:"tags"`
+		} `json:"profile"`
 	}
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode profile response: %v", err)
 	}
-	if !resp.ProfileCompleted || resp.Profile == nil {
+	if !resp.ProfileCompleted {
 		t.Fatalf("expected completed profile, got %+v", resp)
 	}
 	if resp.Profile.Username != "Profile User" {
 		t.Fatalf("expected username Profile User, got %s", resp.Profile.Username)
+	}
+	if len(resp.Profile.Tags) != 2 || resp.Profile.Tags[0].ID != 2 || resp.Profile.Tags[1].ID != 5 {
+		t.Fatalf("expected tag ids [2 5], got %+v", resp.Profile.Tags)
 	}
 }
 

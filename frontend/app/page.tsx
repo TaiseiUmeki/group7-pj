@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import styles from "./page.module.css";
 import { BottomNav } from "./components/BottomNav";
 import { CreateRecordScreen, PostDetailScreen, ProfileScreen, QuickStartScreen, TimelineScreen } from "./components/screens";
-import { exerciseTypeIDs } from "./constants/workout";
+import { availableTags, exerciseTypeIDs } from "./constants/workout";
 import { myProfile } from "./constants/mockData";
 import type { DetailedWorkoutInput, Profile, TimelinePost, TimelineTab, View, WorkoutRecord, WorkoutRecordResponse, WorkoutSession } from "./types/workout";
 import { formatWorkoutDuration, formatWorkoutLog, formatWorkoutPeriod, getLatestPostedAt, getWorkoutElapsed } from "./utils/workout";
@@ -48,6 +48,7 @@ export default function Home() {
             username?: string;
             bio?: string;
             training_frequency_days?: number;
+            tags?: Array<{ id: number; label: string }>;
           } | null;
         } | null;
 
@@ -64,6 +65,9 @@ export default function Home() {
             name: payload.profile?.username || profile.name,
             bio: payload.profile?.bio || profile.bio,
             inactivityDays: payload.profile?.training_frequency_days ?? profile.inactivityDays,
+            tags: payload.profile?.tags
+              ?.map((tag) => tag.label)
+              .filter((tag): tag is (typeof availableTags)[number] => availableTags.includes(tag as (typeof availableTags)[number])) ?? profile.tags,
           }));
         }
       } catch {

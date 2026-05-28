@@ -2,13 +2,14 @@
 
 import { useState, type SyntheticEvent } from "react";
 import { useRouter } from "next/navigation";
+import { availableTags } from "../constants/workout";
 import styles from "../signup/page.module.css";
 
 export default function ProfileSetupPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
-  const [focusType, setFocusType] = useState("2");
+  const [tagIDs, setTagIDs] = useState<number[]>([]);
   const [trainingFrequencyDays, setTrainingFrequencyDays] = useState("3");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -36,7 +37,7 @@ export default function ProfileSetupPage() {
         body: JSON.stringify({
           username,
           bio,
-          focusType: Number(focusType),
+          tagIds: tagIDs,
           trainingFrequencyDays: Number(trainingFrequencyDays),
         }),
       });
@@ -87,28 +88,46 @@ export default function ProfileSetupPage() {
             />
           </label>
 
-          <label className={styles.field}>
-            <span>重視する項目</span>
-            <select value={focusType} onChange={(event) => setFocusType(event.target.value)}>
-              <option value="1">大会勢</option>
-              <option value="2">筋肥大</option>
-              <option value="3">健康維持</option>
-              <option value="4">初心者</option>
-              <option value="5">ボディメイク</option>
-              <option value="6">ダイエット</option>
-            </select>
-          </label>
+          <fieldset className={styles.tagSelector}>
+            <legend>タグ</legend>
+            <div>
+              {availableTags.map((tag, index) => {
+                const tagID = index + 1;
+                const selected = tagIDs.includes(tagID);
+                return (
+                  <button
+                    aria-pressed={selected}
+                    className={selected ? styles.selectedTag : ""}
+                    key={tag}
+                    onClick={() => {
+                      setTagIDs((ids) => (
+                        ids.includes(tagID)
+                          ? ids.filter((id) => id !== tagID)
+                          : [...ids, tagID].sort((a, b) => a - b)
+                      ));
+                    }}
+                    type="button"
+                  >
+                    #{tag}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
 
           <label className={styles.field}>
             <span>トレーニング頻度</span>
-            <input
-              type="number"
-              name="trainingFrequencyDays"
-              min="1"
-              value={trainingFrequencyDays}
-              onChange={(event) => setTrainingFrequencyDays(event.target.value)}
-              required
-            />
+            <div className={styles.daysField}>
+              <input
+                type="number"
+                name="trainingFrequencyDays"
+                min="1"
+                value={trainingFrequencyDays}
+                onChange={(event) => setTrainingFrequencyDays(event.target.value)}
+                required
+              />
+              <span>日間隔</span>
+            </div>
           </label>
 
           {errorMessage ? <p className={styles.error}>{errorMessage}</p> : null}
