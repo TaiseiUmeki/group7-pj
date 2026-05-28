@@ -1,21 +1,18 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { useState, type SyntheticEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import styles from "./page.module.css";
 
-const seedEmail = "seed@example.com";
-const seedPassword = "password123";
-
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState(seedEmail);
-  const [password, setPassword] = useState(seedPassword);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoading(true);
     setErrorMessage("");
@@ -58,21 +55,10 @@ export default function LoginPage() {
 
   return (
     <main className={styles.shell}>
-      <section className={styles.glow} aria-hidden="true" />
       <section className={styles.card}>
-        <div className={styles.brandRow}>
-          <span className={styles.badge}>JWT AUTH</span>
-          <Link href="/" className={styles.backLink}>
-            デフォルトページへ
-          </Link>
-        </div>
-
         <div className={styles.hero}>
-          <p className={styles.kicker}>ログイン</p>
-          <h1>メールアドレスとパスワードで入る</h1>
-          <p className={styles.description}>
-            シード済みのデモユーザーで、JWT の発行と遷移を確認できます。
-          </p>
+          <p className={styles.kicker}>LOGIN</p>
+          <h1 className={styles.title}>ログイン</h1>
         </div>
 
         <form className={styles.form} onSubmit={handleSubmit}>
@@ -84,7 +70,7 @@ export default function LoginPage() {
               autoComplete="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              placeholder="seed@example.com"
+              placeholder="example@email.com"
               required
             />
           </label>
@@ -97,7 +83,7 @@ export default function LoginPage() {
               autoComplete="current-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="password123"
+              placeholder="パスワードを入力"
               required
             />
           </label>
@@ -109,16 +95,10 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className={styles.sampleBox}>
-          <div>
-            <p className={styles.sampleLabel}>シードアカウント</p>
-            <p className={styles.sampleValue}>{seedEmail}</p>
-          </div>
-          <div>
-            <p className={styles.sampleLabel}>初期パスワード</p>
-            <p className={styles.sampleValue}>{seedPassword}</p>
-          </div>
-        </div>
+        <p className={styles.switchLink}>
+          アカウントをお持ちでない方は{" "}
+          <Link href="/signup">アカウント作成</Link>
+        </p>
       </section>
     </main>
   );

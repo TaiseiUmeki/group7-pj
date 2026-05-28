@@ -5,7 +5,7 @@ import "time"
 // User はユーザー認証情報を表します。
 type User struct {
 	ID           int        `json:"id" gorm:"primaryKey;type:bigint;autoIncrement"`
-	Name         string     `json:"name,omitempty" gorm:"-"`
+	Name         string     `json:"name,omitempty" gorm:"size:255;not null"`
 	Email        string     `json:"email" gorm:"size:255;not null;uniqueIndex:uk_users_email"`
 	PasswordHash string     `json:"-" gorm:"size:255;not null"`
 	CreatedAt    time.Time  `json:"created_at" gorm:"not null;autoCreateTime"`

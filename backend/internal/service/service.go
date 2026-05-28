@@ -64,10 +64,11 @@ func (s *Service) Login(email, password string) (*model.User, string, error) {
 }
 
 // Register は新しいユーザーを作成します（サインアップ）
-func (s *Service) Register(name, email, password string) (*model.User, error) {
+func (s *Service) Register(username, email, password string) (*model.User, error) {
 	normalizedEmail := strings.TrimSpace(strings.ToLower(email))
-	if normalizedEmail == "" || password == "" || strings.TrimSpace(name) == "" {
-		return nil, fmt.Errorf("name, email and password are required")
+	normalizedUsername := strings.TrimSpace(username)
+	if normalizedEmail == "" || password == "" || normalizedUsername == "" {
+		return nil, fmt.Errorf("username, email and password are required")
 	}
 
 	// 既に存在するか確認
@@ -83,7 +84,7 @@ func (s *Service) Register(name, email, password string) (*model.User, error) {
 	}
 
 	user := &model.User{
-		Name:         strings.TrimSpace(name),
+		Name:         normalizedUsername,
 		Email:        normalizedEmail,
 		PasswordHash: string(hash),
 	}
