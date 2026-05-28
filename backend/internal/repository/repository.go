@@ -22,6 +22,7 @@ type Repository interface {
 	GetUserByEmail(email string) (*model.User, error)
 	GetAllUsers() ([]*model.User, error)
 	CreateUser(user *model.User) error
+	CreateProfile(profile *model.Profile) error
 	UpdateUser(user *model.User) error
 	DeleteUser(id int) error
 
@@ -85,6 +86,11 @@ func (r *MySQLRepository) GetAllUsers() ([]*model.User, error) {
 // CreateUser はユーザーを作成します
 func (r *MySQLRepository) CreateUser(user *model.User) error {
 	return r.db.Create(user).Error
+}
+
+// CreateProfile はプロフィールを作成します
+func (r *MySQLRepository) CreateProfile(profile *model.Profile) error {
+	return r.db.Create(profile).Error
 }
 
 // UpdateUser はユーザーを更新します

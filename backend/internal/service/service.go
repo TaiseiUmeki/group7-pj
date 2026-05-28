@@ -84,12 +84,20 @@ func (s *Service) Register(username, email, password string) (*model.User, error
 	}
 
 	user := &model.User{
-		Name:         normalizedUsername,
 		Email:        normalizedEmail,
 		PasswordHash: string(hash),
 	}
 
 	if err := s.repo.CreateUser(user); err != nil {
+		return nil, err
+	}
+
+	profile := &model.Profile{
+		UserID:                user.ID,
+		Username:              normalizedUsername,
+		TrainingFrequencyDays: 3,
+	}
+	if err := s.repo.CreateProfile(profile); err != nil {
 		return nil, err
 	}
 

@@ -6,9 +6,9 @@ import (
 	"backend/internal/model"
 	"backend/internal/repository"
 	"backend/internal/service"
-	"github.com/gin-gonic/gin"
 	"bytes"
 	"encoding/json"
+	"github.com/gin-gonic/gin"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -33,10 +33,13 @@ func TestHealthCheck(t *testing.T) {
 }
 
 type fakeRepo struct {
-	usersByID    map[int]*model.User
-	usersByEmail map[string]*model.User
-	recordsByID  map[int]*model.WorkoutRecord
-	nextRecordID int
+	usersByID     map[int]*model.User
+	usersByEmail  map[string]*model.User
+	profilesByID  map[int]*model.Profile
+	nextUserID    int
+	nextProfileID int
+	recordsByID   map[int]*model.WorkoutRecord
+	nextRecordID  int
 }
 
 func newFakeRepo(seedUser *model.User) *fakeRepo {
@@ -48,10 +51,13 @@ func newFakeRepo(seedUser *model.User) *fakeRepo {
 	}
 
 	return &fakeRepo{
-		usersByID:    usersByID,
-		usersByEmail: usersByEmail,
-		recordsByID:  map[int]*model.WorkoutRecord{},
-		nextRecordID: 1,
+		usersByID:     usersByID,
+		usersByEmail:  usersByEmail,
+		profilesByID:  map[int]*model.Profile{},
+		nextUserID:    len(usersByID) + 1,
+		nextProfileID: 1,
+		recordsByID:   map[int]*model.WorkoutRecord{},
+		nextRecordID:  1,
 	}
 }
 
@@ -80,8 +86,21 @@ func (f *fakeRepo) GetAllUsers() ([]*model.User, error) {
 }
 
 func (f *fakeRepo) CreateUser(user *model.User) error {
+	if user.ID == 0 {
+		user.ID = f.nextUserID
+		f.nextUserID++
+	}
 	f.usersByID[user.ID] = user
 	f.usersByEmail[strings.ToLower(user.Email)] = user
+	return nil
+}
+
+func (f *fakeRepo) CreateProfile(profile *model.Profile) error {
+	if profile.ID == 0 {
+		profile.ID = f.nextProfileID
+		f.nextProfileID++
+	}
+	f.profilesByID[profile.ID] = profile
 	return nil
 }
 
@@ -166,7 +185,6 @@ func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 
 	seedUser := &model.User{
 		ID:           1,
-		Name:         "Demo User",
 		Email:        "seed@example.com",
 		PasswordHash: string(hash),
 	}
@@ -228,8 +246,8 @@ func TestLoginSuccess(t *testing.T) {
 	}
 
 	var resp struct {
-		Token string       `json:"token"`
-		User  *model.User  `json:"user"`
+		Token string      `json:"token"`
+		User  *model.User `json:"user"`
 	}
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
@@ -275,6 +293,32 @@ func TestSignupSuccess(t *testing.T) {
 	}
 	if u.Email != "new@example.com" {
 		t.Fatalf("expected email new@example.com, got %s", u.Email)
+	}
+}
+
+func TestSignupCreatesProfileWithUsername(t *testing.T) {
+	repo := newFakeRepo(nil)
+	svc := service.NewService(repo, "test-secret")
+	h := handler.NewHandler(svc)
+	router := gin.New()
+	router.POST("/api/auth/signup", h.Signup)
+
+	body := bytes.NewBufferString(`{"username":"Profile User","email":"profile@example.com","password":"secret"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/signup", body)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d", w.Code)
+	}
+
+	if len(repo.profilesByID) != 1 {
+		t.Fatalf("expected 1 profile, got %d", len(repo.profilesByID))
+	}
+	for _, profile := range repo.profilesByID {
+		if profile.Username != "Profile User" {
+			t.Fatalf("expected username Profile User, got %s", profile.Username)
+		}
 	}
 }
 
