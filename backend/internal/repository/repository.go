@@ -15,6 +15,9 @@ var ErrUserNotFound = errors.New("user not found")
 // ErrWorkoutRecordNotFound は運動記録が見つからない場合のエラーです
 var ErrWorkoutRecordNotFound = errors.New("workout record not found")
 
+// ErrProfileNotFound はプロフィールが見つからない場合のエラーです
+var ErrProfileNotFound = errors.New("profile not found")
+
 // Repository はデータベースアクセス層のインターフェースです
 type Repository interface {
 	// User関連
@@ -22,7 +25,9 @@ type Repository interface {
 	GetUserByEmail(email string) (*model.User, error)
 	GetAllUsers() ([]*model.User, error)
 	CreateUser(user *model.User) error
+	GetProfileByUserID(userID int) (*model.Profile, error)
 	CreateProfile(profile *model.Profile) error
+	UpdateProfile(profile *model.Profile) error
 	UpdateUser(user *model.User) error
 	DeleteUser(id int) error
 
@@ -88,9 +93,26 @@ func (r *MySQLRepository) CreateUser(user *model.User) error {
 	return r.db.Create(user).Error
 }
 
+// GetProfileByUserID はユーザーIDからプロフィールを取得します
+func (r *MySQLRepository) GetProfileByUserID(userID int) (*model.Profile, error) {
+	var profile model.Profile
+	if err := r.db.Where("user_id = ? AND deleted_at IS NULL", userID).First(&profile).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProfileNotFound
+		}
+		return nil, err
+	}
+	return &profile, nil
+}
+
 // CreateProfile はプロフィールを作成します
 func (r *MySQLRepository) CreateProfile(profile *model.Profile) error {
 	return r.db.Create(profile).Error
+}
+
+// UpdateProfile はプロフィールを更新します
+func (r *MySQLRepository) UpdateProfile(profile *model.Profile) error {
+	return r.db.Save(profile).Error
 }
 
 // UpdateUser はユーザーを更新します

@@ -63,12 +63,11 @@ func (s *Service) Login(email, password string) (*model.User, string, error) {
 	return user, token, nil
 }
 
-// Register は新しいユーザーを作成します（サインアップ）
-func (s *Service) Register(username, email, password string) (*model.User, error) {
+// Register は認証用ユーザーを作成します（サインアップ）。
+func (s *Service) Register(email, password string) (*model.User, error) {
 	normalizedEmail := strings.TrimSpace(strings.ToLower(email))
-	normalizedUsername := strings.TrimSpace(username)
-	if normalizedEmail == "" || password == "" || normalizedUsername == "" {
-		return nil, fmt.Errorf("username, email and password are required")
+	if normalizedEmail == "" || password == "" {
+		return nil, fmt.Errorf("email and password are required")
 	}
 
 	// 既に存在するか確認
@@ -92,16 +91,58 @@ func (s *Service) Register(username, email, password string) (*model.User, error
 		return nil, err
 	}
 
-	profile := &model.Profile{
-		UserID:                user.ID,
-		Username:              normalizedUsername,
-		TrainingFrequencyDays: 3,
+	return user, nil
+}
+
+// GetProfile はユーザーのプロフィールを取得します。
+func (s *Service) GetProfile(userID int) (*model.Profile, error) {
+	return s.repo.GetProfileByUserID(userID)
+}
+
+// SaveProfile はプロフィールを作成または更新します。
+func (s *Service) SaveProfile(userID int, username string, bio *string, focusType *int, trainingFrequencyDays int) (*model.Profile, error) {
+	normalizedUsername := strings.TrimSpace(username)
+	if normalizedUsername == "" {
+		return nil, fmt.Errorf("username is required")
 	}
-	if err := s.repo.CreateProfile(profile); err != nil {
-		return nil, err
+	if trainingFrequencyDays < 1 {
+		return nil, fmt.Errorf("training frequency days must be at least 1")
 	}
 
-	return user, nil
+	var normalizedBio *string
+	if bio != nil {
+		trimmedBio := strings.TrimSpace(*bio)
+		if trimmedBio != "" {
+			normalizedBio = &trimmedBio
+		}
+	}
+
+	profile, err := s.repo.GetProfileByUserID(userID)
+	if err != nil {
+		if !errors.Is(err, repository.ErrProfileNotFound) {
+			return nil, err
+		}
+		profile = &model.Profile{
+			UserID: userID,
+		}
+	}
+
+	profile.Username = normalizedUsername
+	profile.Bio = normalizedBio
+	profile.FocusType = focusType
+	profile.TrainingFrequencyDays = trainingFrequencyDays
+
+	if profile.ID == 0 {
+		if err := s.repo.CreateProfile(profile); err != nil {
+			return nil, err
+		}
+		return profile, nil
+	}
+
+	if err := s.repo.UpdateProfile(profile); err != nil {
+		return nil, err
+	}
+	return profile, nil
 }
 
 // GetCurrentUser はJWTから現在のユーザーを取得します。

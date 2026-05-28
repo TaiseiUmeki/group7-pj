@@ -95,11 +95,25 @@ func (f *fakeRepo) CreateUser(user *model.User) error {
 	return nil
 }
 
+func (f *fakeRepo) GetProfileByUserID(userID int) (*model.Profile, error) {
+	for _, profile := range f.profilesByID {
+		if profile.UserID == userID {
+			return profile, nil
+		}
+	}
+	return nil, repository.ErrProfileNotFound
+}
+
 func (f *fakeRepo) CreateProfile(profile *model.Profile) error {
 	if profile.ID == 0 {
 		profile.ID = f.nextProfileID
 		f.nextProfileID++
 	}
+	f.profilesByID[profile.ID] = profile
+	return nil
+}
+
+func (f *fakeRepo) UpdateProfile(profile *model.Profile) error {
 	f.profilesByID[profile.ID] = profile
 	return nil
 }
@@ -199,6 +213,8 @@ func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 	r.POST("/api/auth/login", h.Login)
 	r.POST("/api/auth/signup", h.Signup)
 	r.GET("/api/auth/me", h.Me)
+	r.GET("/api/me/profile", h.GetMyProfile)
+	r.POST("/api/me/profile", h.SaveMyProfile)
 	r.POST("/api/workout-records", h.CreateWorkoutRecord)
 	r.PUT("/api/workout-records/:id", h.UpdateWorkoutRecord)
 	r.GET("/api/workout-records", h.ListWorkoutRecords)
@@ -278,7 +294,7 @@ func TestLoginFailure(t *testing.T) {
 func TestSignupSuccess(t *testing.T) {
 	router, _, _ := newTestRouter(t)
 
-	body := bytes.NewBufferString(`{"username":"New User","email":"new@example.com","password":"secret"}`)
+	body := bytes.NewBufferString(`{"email":"new@example.com","password":"secret"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/signup", body)
 	w := httptest.NewRecorder()
 
@@ -296,43 +312,70 @@ func TestSignupSuccess(t *testing.T) {
 	}
 }
 
-func TestSignupCreatesProfileWithUsername(t *testing.T) {
-	repo := newFakeRepo(nil)
-	svc := service.NewService(repo, "test-secret")
-	h := handler.NewHandler(svc)
-	router := gin.New()
-	router.POST("/api/auth/signup", h.Signup)
-
-	body := bytes.NewBufferString(`{"username":"Profile User","email":"profile@example.com","password":"secret"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/signup", body)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-	if w.Code != http.StatusCreated {
-		t.Fatalf("expected status 201, got %d", w.Code)
-	}
-
-	if len(repo.profilesByID) != 1 {
-		t.Fatalf("expected 1 profile, got %d", len(repo.profilesByID))
-	}
-	for _, profile := range repo.profilesByID {
-		if profile.Username != "Profile User" {
-			t.Fatalf("expected username Profile User, got %s", profile.Username)
-		}
-	}
-}
-
 func TestSignupDuplicateEmail(t *testing.T) {
 	router, seedUser, _ := newTestRouter(t)
 
 	// try to signup with same email as seedUser
-	body := bytes.NewBufferString(`{"username":"Dup","email":"` + seedUser.Email + `","password":"secret"}`)
+	body := bytes.NewBufferString(`{"email":"` + seedUser.Email + `","password":"secret"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/signup", body)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400 for duplicate email, got %d", w.Code)
+	}
+}
+
+func TestGetMyProfileReturnsIncompleteWhenMissing(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/me/profile", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		ProfileCompleted bool `json:"profileCompleted"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode profile response: %v", err)
+	}
+	if resp.ProfileCompleted {
+		t.Fatal("expected profileCompleted false")
+	}
+}
+
+func TestSaveMyProfileCreatesProfileWithUsername(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	body := bytes.NewBufferString(`{"username":"Profile User","bio":"hello","focusType":2,"trainingFrequencyDays":3}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/me/profile", body)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		ProfileCompleted bool           `json:"profileCompleted"`
+		Profile          *model.Profile `json:"profile"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode profile response: %v", err)
+	}
+	if !resp.ProfileCompleted || resp.Profile == nil {
+		t.Fatalf("expected completed profile, got %+v", resp)
+	}
+	if resp.Profile.Username != "Profile User" {
+		t.Fatalf("expected username Profile User, got %s", resp.Profile.Username)
 	}
 }
 

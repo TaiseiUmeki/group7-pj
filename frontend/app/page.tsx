@@ -29,6 +29,51 @@ export default function Home() {
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
+  useEffect(() => {
+    const token = window.localStorage.getItem("group7pj_token");
+    if (!token) {
+      return;
+    }
+
+    const loadProfile = async () => {
+      try {
+        const response = await fetch(`${apiUrl}/api/me/profile`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const payload = (await response.json().catch(() => null)) as {
+          profileCompleted?: boolean;
+          profile?: {
+            username?: string;
+            bio?: string;
+            training_frequency_days?: number;
+          } | null;
+        } | null;
+
+        if (!response.ok || !payload) {
+          return;
+        }
+        if (!payload.profileCompleted) {
+          window.location.href = "/profile-setup";
+          return;
+        }
+        if (payload.profile) {
+          setCurrentProfile((profile) => ({
+            ...profile,
+            name: payload.profile?.username || profile.name,
+            bio: payload.profile?.bio || profile.bio,
+            inactivityDays: payload.profile?.training_frequency_days ?? profile.inactivityDays,
+          }));
+        }
+      } catch {
+        // プロフィール取得に失敗しても、既存の画面表示は妨げない。
+      }
+    };
+
+    void loadProfile();
+  }, [apiUrl]);
+
   // ログイン済みユーザーのトレーニング記録をサーバーから取得する。
   const loadWorkoutRecords = useCallback(async () => {
     const token = window.localStorage.getItem("group7pj_token");

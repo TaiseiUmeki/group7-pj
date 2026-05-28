@@ -47,10 +47,10 @@
   font-weight: 700;
 }
 
-.field input {
+.field input,
+.field select,
+.field textarea {
   width: 100%;
-  min-height: 50px;
-  padding: 0 14px;
   border: 1px solid #dce3ed;
   border-radius: 11px;
   background: #fff;
@@ -61,12 +61,27 @@
   outline: none;
 }
 
-.field input::placeholder {
+.field input,
+.field select {
+  min-height: 50px;
+  padding: 0 14px;
+}
+
+.field textarea {
+  min-height: 98px;
+  padding: 14px;
+  resize: vertical;
+}
+
+.field input::placeholder,
+.field textarea::placeholder {
   color: #a0aab8;
   font-weight: 400;
 }
 
-.field input:focus {
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
   border-color: #316cf0;
   box-shadow: 0 0 0 3px rgba(49, 108, 240, 0.12);
 }

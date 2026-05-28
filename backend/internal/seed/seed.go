@@ -5,8 +5,11 @@ import (
 
 	"backend/internal/model"
 
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
+
+const devPassword = "password123"
 
 type userSeed struct {
 	Username string
@@ -21,6 +24,11 @@ var users = []userSeed{
 
 // Run inserts development seed data without duplicating rows on restart.
 func Run(db *gorm.DB) error {
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(devPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
 	for _, seedUser := range users {
 		var existing model.User
 		err := db.Where("email = ?", seedUser.Email).First(&existing).Error
@@ -33,7 +41,10 @@ func Run(db *gorm.DB) error {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
-		user := model.User{Email: seedUser.Email}
+		user := model.User{
+			Email:        seedUser.Email,
+			PasswordHash: string(passwordHash),
+		}
 		if err := db.Create(&user).Error; err != nil {
 			return err
 		}
