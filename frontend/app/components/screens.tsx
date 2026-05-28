@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
@@ -209,10 +210,15 @@ export function ProfileScreen({
   onSignout?: () => void;
 }) {
   const [panel, setPanel] = useState<"summary" | "edit" | "following" | "followers">("summary");
-  const inactiveDays = getDaysWithoutPost(profile.lastPostedAt);
+  const [inactiveDays, setInactiveDays] = useState<number | null>(null);
+
+  useEffect(() => {
+    setInactiveDays(getDaysWithoutPost(profile.lastPostedAt));
+  }, [profile.lastPostedAt]);
+
   // 自分のプロフィールだけ、設定した日数以上投稿がない場合に休止状態を表示する。
   const isInactive = Boolean(
-    own && profile.inactivityDays && inactiveDays >= profile.inactivityDays,
+    own && profile.inactivityDays && inactiveDays !== null && inactiveDays >= profile.inactivityDays,
   );
 
   if (own && panel === "edit") {
