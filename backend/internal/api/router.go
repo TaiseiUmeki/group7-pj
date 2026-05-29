@@ -54,6 +54,8 @@ func NewRouter(db *gorm.DB, jwtSecret string) http.Handler {
 
 	auth.POST("/posts", h.CreateTrainingPost)
 	auth.GET("/posts/:postId", h.GetTrainingPost)
+	auth.POST("/posts/:postId/like", h.LikeTrainingPost)
+	auth.DELETE("/posts/:postId/like", h.UnlikeTrainingPost)
 
 	log.Println("Registered routes: /health, /api/auth/login, /api/auth/me, /api/me/profile, /api/users, /api/workout-records, /api/posts")
 

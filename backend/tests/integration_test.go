@@ -44,6 +44,7 @@ type fakeRepo struct {
 	nextProfileID int
 	recordsByID   map[int]*model.WorkoutRecord
 	postsByID     map[int]*model.TrainingPost
+	likes         map[int]map[int]bool
 	nextRecordID  int
 	nextPostID    int
 }
@@ -65,6 +66,7 @@ func newFakeRepo(seedUser *model.User) *fakeRepo {
 		nextProfileID: 1,
 		recordsByID:   map[int]*model.WorkoutRecord{},
 		postsByID:     map[int]*model.TrainingPost{},
+		likes:         map[int]map[int]bool{},
 		nextRecordID:  1,
 		nextPostID:    1,
 	}
@@ -243,6 +245,7 @@ func (f *fakeRepo) ListTimelinePosts(input repository.TimelineQuery) ([]reposito
 		if err != nil {
 			return nil, err
 		}
+		likeCount, likedByMe := f.postLikeStatus(post.ID, input.UserID)
 		rows = append(rows, repository.TimelinePostRow{
 			ID:                    post.ID,
 			Source:                input.Source,
@@ -261,8 +264,8 @@ func (f *fakeRepo) ListTimelinePosts(input repository.TimelineQuery) ([]reposito
 			AuthorUsername:        profile.Username,
 			AuthorBio:             profile.Bio,
 			TrainingFrequencyDays: profile.TrainingFrequencyDays,
-			LikeCount:             0,
-			LikedByMe:             false,
+			LikeCount:             likeCount,
+			LikedByMe:             likedByMe,
 		})
 	}
 	return rows, nil
@@ -277,6 +280,7 @@ func (f *fakeRepo) GetTimelinePostByID(postID int, currentUserID int) (*reposito
 	if err != nil {
 		return nil, err
 	}
+	likeCount, likedByMe := f.postLikeStatus(post.ID, currentUserID)
 	return &repository.TimelinePostRow{
 		ID:                    post.ID,
 		UserID:                post.UserID,
@@ -294,9 +298,47 @@ func (f *fakeRepo) GetTimelinePostByID(postID int, currentUserID int) (*reposito
 		AuthorUsername:        profile.Username,
 		AuthorBio:             profile.Bio,
 		TrainingFrequencyDays: profile.TrainingFrequencyDays,
-		LikeCount:             0,
-		LikedByMe:             false,
+		LikeCount:             likeCount,
+		LikedByMe:             likedByMe,
 	}, nil
+}
+
+func (f *fakeRepo) CreatePostLike(postID int, userID int) error {
+	post, ok := f.postsByID[postID]
+	if !ok || post.DeletedAt != nil {
+		return repository.ErrTrainingPostNotFound
+	}
+	if f.likes[postID] == nil {
+		f.likes[postID] = map[int]bool{}
+	}
+	f.likes[postID][userID] = true
+	return nil
+}
+
+func (f *fakeRepo) DeletePostLike(postID int, userID int) error {
+	post, ok := f.postsByID[postID]
+	if !ok || post.DeletedAt != nil {
+		return repository.ErrTrainingPostNotFound
+	}
+	delete(f.likes[postID], userID)
+	return nil
+}
+
+func (f *fakeRepo) GetPostLikeStatus(postID int, userID int) (repository.PostLikeStatus, error) {
+	post, ok := f.postsByID[postID]
+	if !ok || post.DeletedAt != nil {
+		return repository.PostLikeStatus{}, repository.ErrTrainingPostNotFound
+	}
+	likeCount, likedByMe := f.postLikeStatus(postID, userID)
+	return repository.PostLikeStatus{
+		LikeCount: likeCount,
+		LikedByMe: likedByMe,
+	}, nil
+}
+
+func (f *fakeRepo) postLikeStatus(postID int, userID int) (int, bool) {
+	users := f.likes[postID]
+	return len(users), users[userID]
 }
 
 func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
@@ -367,6 +409,8 @@ func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 	auth.GET("/workout-records/:id", h.GetWorkoutRecord)
 	auth.POST("/posts", h.CreateTrainingPost)
 	auth.GET("/posts/:postId", h.GetTrainingPost)
+	auth.POST("/posts/:postId/like", h.LikeTrainingPost)
+	auth.DELETE("/posts/:postId/like", h.UnlikeTrainingPost)
 
 	return r, seedUser, "test-secret"
 }
@@ -453,6 +497,8 @@ func TestProtectedRoutesRequireBearerToken(t *testing.T) {
 		{name: "workout records", method: http.MethodGet, path: "/api/workout-records"},
 		{name: "create workout record", method: http.MethodPost, path: "/api/workout-records", body: `{}`},
 		{name: "create post", method: http.MethodPost, path: "/api/posts", body: `{"didTrain":true,"trainedOn":"2026-05-28"}`},
+		{name: "like post", method: http.MethodPost, path: "/api/posts/1/like"},
+		{name: "unlike post", method: http.MethodDelete, path: "/api/posts/1/like"},
 	}
 
 	for _, tt := range tests {
@@ -569,6 +615,93 @@ func TestGetTrainingPost(t *testing.T) {
 	}
 	if resp.ID != 1 || resp.Author.Username != "Timeline Author" {
 		t.Fatalf("unexpected post response: %+v", resp)
+	}
+}
+
+func TestLikeTrainingPostPersistsStatus(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	likeReq := httptest.NewRequest(http.MethodPost, "/api/posts/1/like", nil)
+	likeReq.Header.Set("Authorization", "Bearer "+token)
+	likeResp := httptest.NewRecorder()
+
+	router.ServeHTTP(likeResp, likeReq)
+	if likeResp.Code != http.StatusOK {
+		t.Fatalf("expected like status 200, got %d: %s", likeResp.Code, likeResp.Body.String())
+	}
+
+	var liked struct {
+		LikedByMe bool `json:"likedByMe"`
+		LikeCount int  `json:"likeCount"`
+	}
+	if err := json.NewDecoder(likeResp.Body).Decode(&liked); err != nil {
+		t.Fatalf("failed to decode like response: %v", err)
+	}
+	if !liked.LikedByMe || liked.LikeCount != 1 {
+		t.Fatalf("unexpected like response: %+v", liked)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/posts/1", nil)
+	getReq.Header.Set("Authorization", "Bearer "+token)
+	getResp := httptest.NewRecorder()
+	router.ServeHTTP(getResp, getReq)
+	if getResp.Code != http.StatusOK {
+		t.Fatalf("expected post status 200, got %d: %s", getResp.Code, getResp.Body.String())
+	}
+
+	var post struct {
+		LikedByMe bool `json:"likedByMe"`
+		LikeCount int  `json:"likeCount"`
+	}
+	if err := json.NewDecoder(getResp.Body).Decode(&post); err != nil {
+		t.Fatalf("failed to decode post response: %v", err)
+	}
+	if !post.LikedByMe || post.LikeCount != 1 {
+		t.Fatalf("expected liked status in post detail, got %+v", post)
+	}
+}
+
+func TestUnlikeTrainingPostPersistsStatus(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	likeReq := httptest.NewRequest(http.MethodPost, "/api/posts/1/like", nil)
+	likeReq.Header.Set("Authorization", "Bearer "+token)
+	router.ServeHTTP(httptest.NewRecorder(), likeReq)
+
+	unlikeReq := httptest.NewRequest(http.MethodDelete, "/api/posts/1/like", nil)
+	unlikeReq.Header.Set("Authorization", "Bearer "+token)
+	unlikeResp := httptest.NewRecorder()
+
+	router.ServeHTTP(unlikeResp, unlikeReq)
+	if unlikeResp.Code != http.StatusOK {
+		t.Fatalf("expected unlike status 200, got %d: %s", unlikeResp.Code, unlikeResp.Body.String())
+	}
+
+	var unliked struct {
+		LikedByMe bool `json:"likedByMe"`
+		LikeCount int  `json:"likeCount"`
+	}
+	if err := json.NewDecoder(unlikeResp.Body).Decode(&unliked); err != nil {
+		t.Fatalf("failed to decode unlike response: %v", err)
+	}
+	if unliked.LikedByMe || unliked.LikeCount != 0 {
+		t.Fatalf("unexpected unlike response: %+v", unliked)
+	}
+}
+
+func TestLikeTrainingPostReturnsNotFound(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/posts/999/like", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
