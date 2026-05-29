@@ -9,7 +9,8 @@
 
 ### 1.2 認証方式
 
-- Cookieベースのセッション認証を想定する。
+- JWT Bearer認証を利用する。
+- 認証が必要なAPIでは `Authorization: Bearer <token>` ヘッダーを送信する。
 - 認証が必要なAPIで未ログインの場合は `401 Unauthorized` を返す。
 - 自分以外のリソース更新や閲覧権限外の投稿参照は `403 Forbidden` を返す。
 
@@ -19,7 +20,13 @@
 |---|---|---|
 | `Content-Type: application/json` | POST/PUT時必須 | JSONリクエストを送信する |
 | `Accept: application/json` | 推奨 | JSONレスポンスを受け取る |
-| `Cookie` | 認証API以外必須 | セッションCookie |
+| `Authorization: Bearer <token>` | 認証API以外必須 | JWTアクセストークン |
+
+### 1.3.1 JSONフィールド命名
+
+- APIのJSONフィールド名は原則として `camelCase` とする。
+- DBカラム名は `snake_case` とする。
+- `POST /api/posts` は移行互換のため、リクエスト入力に限り `snake_case` も受け付ける。
 
 ### 1.4 エラーレスポンス形式
 
@@ -79,11 +86,11 @@
 
 | 種別 | カラム | 例 |
 |---|---|---|
-| 重視項目 | `profiles.focus_type` | `1=大会勢`, `2=健康維持`, `3=ダイエット` |
+| プロフィールタグ | `profile_tags.tag_id` | `1=やる気`, `2=大会勢`, `3=健康維持`, `4=ダイエット`, `5=筋肥大`, `6=パワーリフティング`, `7=ボディメイク`, `8=初心者` |
 | セッション状態 | `training_sessions.status` | `1=進行中`, `2=完了`, `3=キャンセル` |
 | 種目・部位 | `training_posts.exercise_type` | `1=胸`, `2=背中`, `3=脚` |
 | 推薦枠状態 | `recommendation_slots.status` | `1=有効`, `2=フォロー済み`, `3=期限切れ` |
-| 通知種別 | `notifications.notification_type` | `1=いいね`, `2=応援`, `3=サボり検知` |
+| 通知種別 | `notifications.notification_type` | `1=応援`, `2=サボり検知` |
 
 ## 2. 認証API
 
@@ -103,6 +110,7 @@
 
 ```json
 {
+  "token": "jwt-token",
   "user": {
     "id": 1,
     "email": "user@example.com"
@@ -110,38 +118,29 @@
 }
 ```
 
-### POST /api/auth/logout
+### GET /api/auth/me
 
-- **説明**: 現在のセッションからログアウトする。
-- **レスポンス**: `204 No Content`
-
-### GET /api/auth/status
-
-- **説明**: 現在のログイン状態を取得する。
+- **説明**: JWTから現在のログインユーザーを取得する。
 - **レスポンス**:
 
 ```json
 {
-  "authenticated": true,
-  "user": {
-    "id": 1,
-    "email": "user@example.com"
-  }
+  "id": 1,
+  "email": "user@example.com"
 }
 ```
 
 ## 3. ユーザー・プロフィールAPI
 
-### POST /api/users
+### POST /api/auth/signup
 
-- **説明**: ユーザーを新規登録する。
+- **説明**: 認証用ユーザーを新規登録する。プロフィールは別途 `/api/me/profile` で登録する。
 - **リクエスト**:
 
 ```json
 {
   "email": "user@example.com",
-  "password": "password",
-  "username": "トレーニー"
+  "password": "password"
 }
 ```
 
@@ -150,42 +149,51 @@
 ```json
 {
   "id": 1,
-  "email": "user@example.com",
-  "profile": {
-    "username": "トレーニー"
-  }
+  "email": "user@example.com"
 }
 ```
 
-### GET /api/me
+### GET /api/me/profile
 
-- **説明**: 自分のユーザー情報とプロフィールを取得する。
+- **説明**: 自分のプロフィール登録状況とプロフィールを取得する。
 - **レスポンス**:
 
 ```json
 {
-  "id": 1,
-  "email": "user@example.com",
+  "profileCompleted": true,
   "profile": {
+    "id": 10,
+    "user_id": 1,
     "username": "トレーニー",
     "bio": "週3で筋トレしています",
-    "focusType": 1,
-    "focusTypeLabel": "大会勢",
-    "trainingFrequencyDays": 2
+    "training_frequency_days": 2,
+    "tags": [
+      { "id": 2, "label": "大会勢" },
+      { "id": 5, "label": "筋肥大" }
+    ]
   }
 }
 ```
 
-### PUT /api/me/profile
+プロフィール未登録時:
 
-- **説明**: 自分のプロフィールを更新する。
+```json
+{
+  "profileCompleted": false,
+  "profile": null
+}
+```
+
+### POST /api/me/profile / PUT /api/me/profile
+
+- **説明**: 自分のプロフィールを作成または更新する。
 - **リクエスト**:
 
 ```json
 {
   "username": "トレーニー",
   "bio": "週3で筋トレしています",
-  "focusType": 1,
+  "tagIds": [2, 5],
   "trainingFrequencyDays": 2
 }
 ```
@@ -194,11 +202,18 @@
 
 ```json
 {
-  "username": "トレーニー",
-  "bio": "週3で筋トレしています",
-  "focusType": 1,
-  "focusTypeLabel": "大会勢",
-  "trainingFrequencyDays": 2
+  "profileCompleted": true,
+  "profile": {
+    "id": 10,
+    "user_id": 1,
+    "username": "トレーニー",
+    "bio": "週3で筋トレしています",
+    "training_frequency_days": 2,
+    "tags": [
+      { "id": 2, "label": "大会勢" },
+      { "id": 5, "label": "筋肥大" }
+    ]
+  }
 }
 ```
 
@@ -213,9 +228,10 @@
   "profile": {
     "username": "脚トレ好き",
     "bio": "脚の日が好きです",
-    "focusType": 2,
-    "focusTypeLabel": "健康維持",
-    "trainingFrequencyDays": 3
+    "training_frequency_days": 3,
+    "tags": [
+      { "id": 3, "label": "健康維持" }
+    ]
   },
   "isFollowing": false
 }
@@ -225,13 +241,18 @@
 
 ### GET /api/timeline
 
-- **説明**: フォロー先と推薦ユーザーの投稿サマリーを取得する。
+- **説明**: フォロー中タブまたはおすすめタブに表示する投稿サマリーを取得する。
+- **認証**: 必須。
 - **クエリパラメータ**:
 
 | パラメータ | 型 | 必須 | 説明 |
 |---|---|---|---|
-| `limit` | int | 任意 | 取得件数 |
+| `source` | string | 任意 | `following` または `recommended`。未指定時は `following` |
+| `limit` | int | 任意 | 取得件数。デフォルト20、最大50 |
 | `cursor` | string | 任意 | 次ページカーソル |
+
+- `source=following`: 自分がフォローしているユーザーの投稿を返す。
+- `source=recommended`: 当日の推薦枠最大5人に含まれるユーザーの投稿を返す。
 
 - **レスポンス**:
 
@@ -240,19 +261,28 @@
   "items": [
     {
       "id": 101,
-      "user": {
-        "id": 2,
-        "username": "脚トレ好き"
-      },
+      "source": "following",
       "didTrain": true,
       "trainedOn": "2026-05-26",
+      "startedAt": "2026-05-26T10:00:00+09:00",
+      "endedAt": "2026-05-26T11:00:00+09:00",
       "exerciseType": 3,
       "exerciseTypeLabel": "脚",
       "durationMinutes": 60,
-      "notePreview": "スクワット中心にやりました",
+      "note": "スクワット中心にやりました",
+      "visibility": "followers_and_recommended",
       "likeCount": 12,
       "likedByMe": false,
-      "createdAt": "2026-05-26T12:00:00+09:00"
+      "createdAt": "2026-05-26T12:00:00+09:00",
+      "author": {
+        "id": 2,
+        "username": "脚トレ好き",
+        "bio": "脚トレ中心に記録しています",
+        "trainingFrequencyDays": 3,
+        "tags": [
+          { "id": 2, "label": "大会勢" }
+        ]
+      }
     }
   ],
   "nextCursor": null
@@ -262,6 +292,7 @@
 ### POST /api/posts
 
 - **説明**: 事後報告またはクイックスタート終了後の報告投稿を作成する。
+- **備考**: 正式なリクエスト形式は `camelCase`。移行互換として `session_id`, `did_train`, `trained_on`, `started_at`, `ended_at`, `exercise_type`, `duration_minutes` も同じ意味で受け付ける。
 - **リクエスト**:
 
 ```json
@@ -436,6 +467,7 @@
 ### GET /api/recommendations
 
 - **説明**: 日替わり推薦ユーザーを最大5人取得する。表示中の推薦ユーザーは全員フォロー可能。
+- **補足**: 推薦対象はタグに依存せず、対象候補からランダムに選定する。
 - **レスポンス**:
 
 ```json
@@ -445,8 +477,9 @@
       "user": {
         "id": 3,
         "username": "ベンチ好き",
-        "focusType": 1,
-        "focusTypeLabel": "大会勢"
+        "tags": [
+          { "id": 2, "label": "大会勢" }
+        ]
       },
       "status": 1,
       "statusLabel": "有効",
@@ -608,17 +641,22 @@
 
 ## 10. マスターAPI
 
-### GET /api/masters/focus-types
+### GET /api/masters/profile-tags
 
-- **説明**: 重視項目IDと表示値を取得する。
+- **説明**: プロフィールタグIDと表示値を取得する。
 - **レスポンス**:
 
 ```json
 {
   "items": [
-    { "id": 1, "label": "大会勢" },
-    { "id": 2, "label": "健康維持" },
-    { "id": 3, "label": "ダイエット" }
+    { "id": 1, "label": "やる気" },
+    { "id": 2, "label": "大会勢" },
+    { "id": 3, "label": "健康維持" },
+    { "id": 4, "label": "ダイエット" },
+    { "id": 5, "label": "筋肥大" },
+    { "id": 6, "label": "パワーリフティング" },
+    { "id": 7, "label": "ボディメイク" },
+    { "id": 8, "label": "初心者" }
   ]
 }
 ```

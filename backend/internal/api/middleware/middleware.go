@@ -3,9 +3,11 @@ package middleware
 import (
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // CORSMiddleware returns a Gin middleware to handle CORS and preflight
@@ -35,5 +37,41 @@ func LoggingMiddleware() gin.HandlerFunc {
 
 		duration := time.Since(startTime)
 		log.Printf("Completed in %v", duration)
+	}
+}
+
+type authClaims struct {
+	UserID int    `json:"user_id"`
+	Email  string `json:"email"`
+	jwt.RegisteredClaims
+}
+
+// AuthMiddleware validates Authorization: Bearer <token> and stores the user id in context.
+func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authorization header is required"})
+			return
+		}
+
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		if tokenString == authHeader || strings.TrimSpace(tokenString) == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "bearer token is required"})
+			return
+		}
+
+		claims := &authClaims{}
+		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
+			return []byte(jwtSecret), nil
+		})
+		if err != nil || !token.Valid || claims.UserID == 0 {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+			return
+		}
+
+		c.Set("userID", claims.UserID)
+		c.Set("userEmail", claims.Email)
+		c.Next()
 	}
 }

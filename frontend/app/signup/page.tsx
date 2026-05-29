@@ -7,7 +7,6 @@ import styles from "./page.module.css";
 
 export default function SignupPage() {
   const router = useRouter();
-  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -31,7 +30,7 @@ export default function SignupPage() {
       const signupResponse = await fetch(`${apiUrl}/api/auth/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, email, password }),
+        body: JSON.stringify({ email, password }),
       });
 
       if (!signupResponse.ok) {
@@ -54,7 +53,7 @@ export default function SignupPage() {
 
       window.localStorage.setItem("group7pj_token", loginPayload.token);
       document.cookie = `group7pj_token=${encodeURIComponent(loginPayload.token)}; path=/; max-age=86400; samesite=lax`;
-      router.replace("/");
+      router.replace("/profile-setup");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "アカウント作成に失敗しました");
     } finally {
@@ -71,19 +70,6 @@ export default function SignupPage() {
         </div>
 
         <form className={styles.form} onSubmit={handleSubmit}>
-          <label className={styles.field}>
-            <span>ユーザーネーム</span>
-            <input
-              type="text"
-              name="username"
-              autoComplete="username"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              placeholder="表示名を入力"
-              required
-            />
-          </label>
-
           <label className={styles.field}>
             <span>メールアドレス</span>
             <input

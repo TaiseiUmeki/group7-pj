@@ -29,22 +29,33 @@ func NewRouter(db *gorm.DB, jwtSecret string) http.Handler {
 	// Routes
 	r.GET("/health", h.HealthCheck)
 
-	r.POST("/api/auth/login", h.Login)
-	r.POST("/api/auth/signup", h.Signup)
-	r.GET("/api/auth/me", h.Me)
+	api := r.Group("/api")
+	api.POST("/auth/login", h.Login)
+	api.POST("/auth/signup", h.Signup)
 
-	r.GET("/api/users", h.GetAllUsers)
-	r.GET("/api/users/get", h.GetUser)
+	auth := r.Group("/api")
+	auth.Use(middleware.AuthMiddleware(jwtSecret))
+	auth.GET("/auth/me", h.Me)
+	auth.GET("/me/profile", h.GetMyProfile)
+	auth.POST("/me/profile", h.SaveMyProfile)
+	auth.PUT("/me/profile", h.SaveMyProfile)
 
-	r.GET("/api/workout-records", h.ListWorkoutRecords)
-	r.POST("/api/workout-records", h.CreateWorkoutRecord)
-	r.GET("/api/workout-records/:id", h.GetWorkoutRecord)
-	r.PUT("/api/workout-records/:id", h.UpdateWorkoutRecord)
-	r.GET("/api/workout-records/latest", h.GetLatestWorkoutRecord)
+	auth.GET("/users", h.GetAllUsers)
+	auth.GET("/users/get", h.GetUser)
+	auth.GET("/users/:userId", h.GetUserProfile)
 
-	r.POST("/api/posts", h.CreateTrainingPost)
+	auth.GET("/timeline", h.GetTimeline)
 
-	log.Println("Registered routes: /health, /api/auth/login, /api/auth/me, /api/users, /api/workout-records, /api/posts")
+	auth.GET("/workout-records", h.ListWorkoutRecords)
+	auth.POST("/workout-records", h.CreateWorkoutRecord)
+	auth.GET("/workout-records/latest", h.GetLatestWorkoutRecord)
+	auth.GET("/workout-records/:id", h.GetWorkoutRecord)
+	auth.PUT("/workout-records/:id", h.UpdateWorkoutRecord)
+
+	auth.POST("/posts", h.CreateTrainingPost)
+	auth.GET("/posts/:postId", h.GetTrainingPost)
+
+	log.Println("Registered routes: /health, /api/auth/login, /api/auth/me, /api/me/profile, /api/users, /api/workout-records, /api/posts")
 
 	return r
 }

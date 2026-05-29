@@ -5,7 +5,6 @@ import "time"
 // User はユーザー認証情報を表します。
 type User struct {
 	ID           int        `json:"id" gorm:"primaryKey;type:bigint;autoIncrement"`
-	Name         string     `json:"name,omitempty" gorm:"size:255;not null"`
 	Email        string     `json:"email" gorm:"size:255;not null;uniqueIndex:uk_users_email"`
 	PasswordHash string     `json:"-" gorm:"size:255;not null"`
 	CreatedAt    time.Time  `json:"created_at" gorm:"not null;autoCreateTime"`
@@ -19,11 +18,18 @@ type Profile struct {
 	UserID                int        `json:"user_id" gorm:"type:bigint;not null;uniqueIndex:uk_profiles_user_id"`
 	Username              string     `json:"username" gorm:"size:80;not null"`
 	Bio                   *string    `json:"bio,omitempty" gorm:"type:text"`
-	FocusType             *int       `json:"focus_type,omitempty" gorm:"index:idx_profiles_focus_type"`
 	TrainingFrequencyDays int        `json:"training_frequency_days" gorm:"not null;default:3"`
 	CreatedAt             time.Time  `json:"created_at" gorm:"not null;autoCreateTime"`
 	UpdatedAt             time.Time  `json:"updated_at" gorm:"not null;autoUpdateTime"`
 	DeletedAt             *time.Time `json:"deleted_at,omitempty" gorm:"index"`
+}
+
+// ProfileTag はプロフィールに紐づく固定タグIDを表します。
+type ProfileTag struct {
+	ID        int       `json:"id" gorm:"primaryKey;type:bigint;autoIncrement"`
+	ProfileID int       `json:"profile_id" gorm:"type:bigint;not null;uniqueIndex:uk_profile_tags_pair,priority:1;index:idx_profile_tags_profile"`
+	TagID     int       `json:"tag_id" gorm:"not null;uniqueIndex:uk_profile_tags_pair,priority:2;index:idx_profile_tags_tag_id"`
+	CreatedAt time.Time `json:"created_at" gorm:"not null;autoCreateTime"`
 }
 
 // TrainingSession はクイックスタートによる開始・終了記録を表します。

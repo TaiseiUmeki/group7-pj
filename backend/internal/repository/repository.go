@@ -15,6 +15,11 @@ var ErrUserNotFound = errors.New("user not found")
 // ErrWorkoutRecordNotFound は運動記録が見つからない場合のエラーです
 var ErrWorkoutRecordNotFound = errors.New("workout record not found")
 
+// ErrProfileNotFound はプロフィールが見つからない場合のエラーです
+var ErrProfileNotFound = errors.New("profile not found")
+
+var ErrTrainingPostNotFound = errors.New("training post not found")
+
 // Repository はデータベースアクセス層のインターフェースです
 type Repository interface {
 	// User関連
@@ -22,6 +27,11 @@ type Repository interface {
 	GetUserByEmail(email string) (*model.User, error)
 	GetAllUsers() ([]*model.User, error)
 	CreateUser(user *model.User) error
+	GetProfileByUserID(userID int) (*model.Profile, error)
+	GetProfileTagIDs(profileID int) ([]int, error)
+	CreateProfile(profile *model.Profile) error
+	ReplaceProfileTags(profileID int, tagIDs []int) error
+	UpdateProfile(profile *model.Profile) error
 	UpdateUser(user *model.User) error
 	DeleteUser(id int) error
 
@@ -35,6 +45,39 @@ type Repository interface {
 
 	// TrainingPost関連
 	CreateTrainingPost(post *model.TrainingPost) error
+	ListTimelinePosts(input TimelineQuery) ([]TimelinePostRow, error)
+	GetTimelinePostByID(postID int, currentUserID int) (*TimelinePostRow, error)
+}
+
+type TimelineQuery struct {
+	UserID      int
+	Source      string
+	Limit       int
+	CursorTime  *time.Time
+	CursorID    *int
+	CurrentDate time.Time
+}
+
+type TimelinePostRow struct {
+	ID                    int
+	Source                string
+	UserID                int
+	DidTrain              bool
+	TrainedOn             time.Time
+	StartedAt             *time.Time
+	EndedAt               *time.Time
+	ExerciseType          *int
+	DurationMinutes       *int
+	Note                  *string
+	Visibility            string
+	CreatedAt             time.Time
+	AuthorProfileID       int
+	AuthorUserID          int
+	AuthorUsername        string
+	AuthorBio             *string
+	TrainingFrequencyDays int
+	LikeCount             int
+	LikedByMe             bool
 }
 
 // MySQLRepository はMySQL用のRepository実装です
@@ -85,6 +128,62 @@ func (r *MySQLRepository) GetAllUsers() ([]*model.User, error) {
 // CreateUser はユーザーを作成します
 func (r *MySQLRepository) CreateUser(user *model.User) error {
 	return r.db.Create(user).Error
+}
+
+// GetProfileByUserID はユーザーIDからプロフィールを取得します
+func (r *MySQLRepository) GetProfileByUserID(userID int) (*model.Profile, error) {
+	var profile model.Profile
+	if err := r.db.Where("user_id = ? AND deleted_at IS NULL", userID).First(&profile).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProfileNotFound
+		}
+		return nil, err
+	}
+	return &profile, nil
+}
+
+// GetProfileTagIDs はプロフィールに設定されたタグIDを取得します
+func (r *MySQLRepository) GetProfileTagIDs(profileID int) ([]int, error) {
+	var profileTags []model.ProfileTag
+	if err := r.db.Where("profile_id = ?", profileID).Order("tag_id ASC").Find(&profileTags).Error; err != nil {
+		return nil, err
+	}
+
+	tagIDs := make([]int, 0, len(profileTags))
+	for _, profileTag := range profileTags {
+		tagIDs = append(tagIDs, profileTag.TagID)
+	}
+	return tagIDs, nil
+}
+
+// CreateProfile はプロフィールを作成します
+func (r *MySQLRepository) CreateProfile(profile *model.Profile) error {
+	return r.db.Create(profile).Error
+}
+
+// ReplaceProfileTags はプロフィールのタグを指定ID群で置き換えます
+func (r *MySQLRepository) ReplaceProfileTags(profileID int, tagIDs []int) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("profile_id = ?", profileID).Delete(&model.ProfileTag{}).Error; err != nil {
+			return err
+		}
+
+		for _, tagID := range tagIDs {
+			profileTag := model.ProfileTag{
+				ProfileID: profileID,
+				TagID:     tagID,
+			}
+			if err := tx.Create(&profileTag).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// UpdateProfile はプロフィールを更新します
+func (r *MySQLRepository) UpdateProfile(profile *model.Profile) error {
+	return r.db.Save(profile).Error
 }
 
 // UpdateUser はユーザーを更新します
@@ -180,6 +279,79 @@ func (r *MySQLRepository) DeleteWorkoutRecord(id int) error {
 // CreateTrainingPost はトレーニング報告投稿を作成します
 func (r *MySQLRepository) CreateTrainingPost(post *model.TrainingPost) error {
 	return r.db.Create(post).Error
+}
+
+func (r *MySQLRepository) GetTimelinePostByID(postID int, currentUserID int) (*TimelinePostRow, error) {
+	var row TimelinePostRow
+	err := r.timelinePostBaseQuery(currentUserID).
+		Where("tp.id = ?", postID).
+		First(&row).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrTrainingPostNotFound
+		}
+		return nil, err
+	}
+	return &row, nil
+}
+
+func (r *MySQLRepository) ListTimelinePosts(input TimelineQuery) ([]TimelinePostRow, error) {
+	query := r.timelinePostBaseQuery(input.UserID).
+		Where("tp.user_id <> ?", input.UserID)
+
+	switch input.Source {
+	case "following":
+		query = query.
+			Joins("JOIN follows AS f ON f.followee_user_id = tp.user_id AND f.follower_user_id = ?", input.UserID).
+			Where("tp.visibility IN ?", []string{"followers", "followers_and_recommended"})
+	case "recommended":
+		query = query.
+			Joins("JOIN recommendation_slots AS rs ON rs.recommended_user_id = tp.user_id AND rs.user_id = ? AND rs.slot_date = ? AND rs.status = 1", input.UserID, dateOnly(input.CurrentDate)).
+			Where("tp.visibility IN ?", []string{"recommended", "followers_and_recommended"})
+	default:
+		return nil, errors.New("invalid timeline source")
+	}
+
+	if input.CursorTime != nil && input.CursorID != nil {
+		query = query.Where("(tp.created_at < ? OR (tp.created_at = ? AND tp.id < ?))", input.CursorTime, input.CursorTime, *input.CursorID)
+	}
+
+	var rows []TimelinePostRow
+	err := query.
+		Order("tp.created_at DESC, tp.id DESC").
+		Limit(input.Limit).
+		Find(&rows).Error
+	for i := range rows {
+		rows[i].Source = input.Source
+	}
+	return rows, err
+}
+
+func (r *MySQLRepository) timelinePostBaseQuery(currentUserID int) *gorm.DB {
+	return r.db.Table("training_posts AS tp").
+		Select(`
+			tp.id,
+			tp.user_id,
+			tp.did_train,
+			tp.trained_on,
+			tp.started_at,
+			tp.ended_at,
+			tp.exercise_type,
+			tp.duration_minutes,
+			tp.note,
+			tp.visibility,
+			tp.created_at,
+			p.id AS author_profile_id,
+			p.user_id AS author_user_id,
+			p.username AS author_username,
+			p.bio AS author_bio,
+			p.training_frequency_days,
+			(SELECT COUNT(*) FROM post_likes AS pl WHERE pl.post_id = tp.id) AS like_count,
+			CASE WHEN my_like.id IS NULL THEN FALSE ELSE TRUE END AS liked_by_me
+		`).
+		Joins("JOIN profiles AS p ON p.user_id = tp.user_id AND p.deleted_at IS NULL").
+		Joins("LEFT JOIN post_likes AS my_like ON my_like.post_id = tp.id AND my_like.user_id = ?", currentUserID).
+		Where("tp.deleted_at IS NULL")
 }
 
 func trainingPostFromWorkoutRecord(record *model.WorkoutRecord) *model.TrainingPost {
