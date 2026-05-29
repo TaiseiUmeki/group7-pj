@@ -20,6 +20,7 @@ export type Badge = {
 };
 
 export type Connection = {
+  userId?: number;
   name: string;
   handle: string;
   tone: Tone;
@@ -44,6 +45,7 @@ export type Profile = {
   inactivityDays?: number;
   tags?: ProfileTag[];
   lastPostedAt?: string;
+  isFollowing?: boolean;
 };
 
 export type TimelinePost = {

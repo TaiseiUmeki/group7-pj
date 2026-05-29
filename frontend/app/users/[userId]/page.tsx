@@ -9,11 +9,16 @@ import styles from "../../page.module.css";
 import type { Profile } from "../../types/workout";
 import { mapApiProfileToProfile, type UserProfileApiResponse } from "../../utils/apiMappers";
 
+type FollowResponse = {
+  following: boolean;
+};
+
 export default function UserProfilePage() {
   const params = useParams<{ userId: string }>();
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [detailError, setDetailError] = useState("");
+  const [followUpdating, setFollowUpdating] = useState(false);
 
   useEffect(() => {
     const userID = Number(params.userId);
@@ -52,10 +57,52 @@ export default function UserProfilePage() {
     void loadMemberProfile();
   }, [params.userId]);
 
+  const toggleFollow = async () => {
+    const userID = Number(params.userId);
+    const token = window.localStorage.getItem("group7pj_token");
+    if (!Number.isFinite(userID)) {
+      setDetailError("ユーザーIDが正しくありません。");
+      return;
+    }
+    if (!token) {
+      setDetailError("ログイン情報を確認できません。もう一度ログインしてください。");
+      return;
+    }
+
+    setFollowUpdating(true);
+    setDetailError("");
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+      const response = await fetch(`${apiUrl}/api/users/${userID}/follow`, {
+        method: profile?.isFollowing ? "DELETE" : "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const payload = (await response.json().catch(() => null)) as FollowResponse | { error?: string } | null;
+      if (!response.ok || !payload || !("following" in payload)) {
+        const message = payload && "error" in payload ? payload.error : undefined;
+        throw new Error(message || "フォロー状態を更新できませんでした。");
+      }
+      setProfile((currentProfile) => (
+        currentProfile ? { ...currentProfile, isFollowing: payload.following } : currentProfile
+      ));
+    } catch (error) {
+      setDetailError(error instanceof Error ? error.message : "フォロー状態を更新できませんでした。");
+    } finally {
+      setFollowUpdating(false);
+    }
+  };
+
   return (
     <AppShell activeView="member">
       {profile ? (
-        <ProfileScreen profile={profile} onBack={() => router.push("/")} />
+        <ProfileScreen
+          profile={profile}
+          followUpdating={followUpdating}
+          onBack={() => router.push("/")}
+          onFollowToggle={toggleFollow}
+        />
       ) : (
         <p className={styles.emptyState}>{detailError || "プロフィールを読み込んでいます..."}</p>
       )}

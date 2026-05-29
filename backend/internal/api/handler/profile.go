@@ -59,3 +59,35 @@ func (h *Handler) SaveMyProfile(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"profileCompleted": true, "profile": profile})
 }
+
+// GetMyFollowing はログイン中ユーザーがフォローしているユーザー一覧を返します。
+func (h *Handler) GetMyFollowing(c *gin.Context) {
+	user, err := h.currentUserFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	connections, err := h.service.GetFollowing(user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, connections)
+}
+
+// GetMyFollowers はログイン中ユーザーをフォローしているユーザー一覧を返します。
+func (h *Handler) GetMyFollowers(c *gin.Context) {
+	user, err := h.currentUserFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	connections, err := h.service.GetFollowers(user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, connections)
+}

@@ -45,6 +45,7 @@ type fakeRepo struct {
 	recordsByID   map[int]*model.WorkoutRecord
 	postsByID     map[int]*model.TrainingPost
 	likes         map[int]map[int]bool
+	follows       map[int]map[int]bool
 	nextRecordID  int
 	nextPostID    int
 }
@@ -67,6 +68,7 @@ func newFakeRepo(seedUser *model.User) *fakeRepo {
 		recordsByID:   map[int]*model.WorkoutRecord{},
 		postsByID:     map[int]*model.TrainingPost{},
 		likes:         map[int]map[int]bool{},
+		follows:       map[int]map[int]bool{},
 		nextRecordID:  1,
 		nextPostID:    1,
 	}
@@ -341,6 +343,71 @@ func (f *fakeRepo) postLikeStatus(postID int, userID int) (int, bool) {
 	return len(users), users[userID]
 }
 
+func (f *fakeRepo) CreateFollow(followerUserID int, followeeUserID int) error {
+	if _, ok := f.usersByID[followeeUserID]; !ok {
+		return repository.ErrUserNotFound
+	}
+	if f.follows[followerUserID] == nil {
+		f.follows[followerUserID] = map[int]bool{}
+	}
+	f.follows[followerUserID][followeeUserID] = true
+	return nil
+}
+
+func (f *fakeRepo) DeleteFollow(followerUserID int, followeeUserID int) error {
+	if _, ok := f.usersByID[followeeUserID]; !ok {
+		return repository.ErrUserNotFound
+	}
+	delete(f.follows[followerUserID], followeeUserID)
+	return nil
+}
+
+func (f *fakeRepo) GetFollowStatus(followerUserID int, followeeUserID int) (repository.FollowStatus, error) {
+	if _, ok := f.usersByID[followeeUserID]; !ok {
+		return repository.FollowStatus{}, repository.ErrUserNotFound
+	}
+	return repository.FollowStatus{Following: f.follows[followerUserID][followeeUserID]}, nil
+}
+
+func (f *fakeRepo) ListFollowingProfiles(userID int) ([]repository.FollowConnectionRow, error) {
+	rows := make([]repository.FollowConnectionRow, 0, len(f.follows[userID]))
+	for followeeUserID := range f.follows[userID] {
+		profile, err := f.GetProfileByUserID(followeeUserID)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, repository.FollowConnectionRow{
+			UserID:   profile.UserID,
+			Username: profile.Username,
+		})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		return rows[i].UserID < rows[j].UserID
+	})
+	return rows, nil
+}
+
+func (f *fakeRepo) ListFollowerProfiles(userID int) ([]repository.FollowConnectionRow, error) {
+	rows := []repository.FollowConnectionRow{}
+	for followerUserID, followees := range f.follows {
+		if !followees[userID] {
+			continue
+		}
+		profile, err := f.GetProfileByUserID(followerUserID)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, repository.FollowConnectionRow{
+			UserID:   profile.UserID,
+			Username: profile.Username,
+		})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		return rows[i].UserID < rows[j].UserID
+	})
+	return rows, nil
+}
+
 func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 	t.Helper()
 
@@ -400,7 +467,11 @@ func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 	auth.GET("/auth/me", h.Me)
 	auth.GET("/me/profile", h.GetMyProfile)
 	auth.POST("/me/profile", h.SaveMyProfile)
+	auth.GET("/me/following", h.GetMyFollowing)
+	auth.GET("/me/followers", h.GetMyFollowers)
 	auth.GET("/users/:userId", h.GetUserProfile)
+	auth.POST("/users/:userId/follow", h.FollowUser)
+	auth.DELETE("/users/:userId/follow", h.UnfollowUser)
 	auth.GET("/timeline", h.GetTimeline)
 	auth.POST("/workout-records", h.CreateWorkoutRecord)
 	auth.PUT("/workout-records/:id", h.UpdateWorkoutRecord)
@@ -493,12 +564,16 @@ func TestProtectedRoutesRequireBearerToken(t *testing.T) {
 	}{
 		{name: "me", method: http.MethodGet, path: "/api/auth/me"},
 		{name: "profile", method: http.MethodGet, path: "/api/me/profile"},
+		{name: "following", method: http.MethodGet, path: "/api/me/following"},
+		{name: "followers", method: http.MethodGet, path: "/api/me/followers"},
 		{name: "timeline", method: http.MethodGet, path: "/api/timeline?source=following"},
 		{name: "workout records", method: http.MethodGet, path: "/api/workout-records"},
 		{name: "create workout record", method: http.MethodPost, path: "/api/workout-records", body: `{}`},
 		{name: "create post", method: http.MethodPost, path: "/api/posts", body: `{"didTrain":true,"trainedOn":"2026-05-28"}`},
 		{name: "like post", method: http.MethodPost, path: "/api/posts/1/like"},
 		{name: "unlike post", method: http.MethodDelete, path: "/api/posts/1/like"},
+		{name: "follow user", method: http.MethodPost, path: "/api/users/2/follow"},
+		{name: "unfollow user", method: http.MethodDelete, path: "/api/users/2/follow"},
 	}
 
 	for _, tt := range tests {
@@ -696,6 +771,162 @@ func TestLikeTrainingPostReturnsNotFound(t *testing.T) {
 	token := loginToken(t, router)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/posts/999/like", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestFollowUserPersistsStatus(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/users/2/follow", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected follow status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var followed struct {
+		Following bool `json:"following"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&followed); err != nil {
+		t.Fatalf("failed to decode follow response: %v", err)
+	}
+	if !followed.Following {
+		t.Fatalf("expected following true, got %+v", followed)
+	}
+
+	profileReq := httptest.NewRequest(http.MethodGet, "/api/users/2", nil)
+	profileReq.Header.Set("Authorization", "Bearer "+token)
+	profileResp := httptest.NewRecorder()
+	router.ServeHTTP(profileResp, profileReq)
+	if profileResp.Code != http.StatusOK {
+		t.Fatalf("expected profile status 200, got %d: %s", profileResp.Code, profileResp.Body.String())
+	}
+
+	var profilePayload struct {
+		Profile struct {
+			Following *bool `json:"following"`
+		} `json:"profile"`
+	}
+	if err := json.NewDecoder(profileResp.Body).Decode(&profilePayload); err != nil {
+		t.Fatalf("failed to decode profile response: %v", err)
+	}
+	if profilePayload.Profile.Following == nil || !*profilePayload.Profile.Following {
+		t.Fatalf("expected profile following true, got %+v", profilePayload)
+	}
+}
+
+func TestGetMyFollowing(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	followReq := httptest.NewRequest(http.MethodPost, "/api/users/2/follow", nil)
+	followReq.Header.Set("Authorization", "Bearer "+token)
+	router.ServeHTTP(httptest.NewRecorder(), followReq)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/me/following", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected following status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Items []struct {
+			UserID   int    `json:"userId"`
+			Username string `json:"username"`
+			Handle   string `json:"handle"`
+			Relation string `json:"relation"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode following response: %v", err)
+	}
+	if len(resp.Items) != 1 || resp.Items[0].UserID != 2 || resp.Items[0].Username != "Timeline Author" {
+		t.Fatalf("unexpected following response: %+v", resp)
+	}
+}
+
+func TestGetMyFollowers(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/me/followers", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected followers status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Items []struct {
+			UserID int `json:"userId"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode followers response: %v", err)
+	}
+	if len(resp.Items) != 0 {
+		t.Fatalf("expected empty followers response, got %+v", resp)
+	}
+}
+
+func TestUnfollowUserPersistsStatus(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	followReq := httptest.NewRequest(http.MethodPost, "/api/users/2/follow", nil)
+	followReq.Header.Set("Authorization", "Bearer "+token)
+	router.ServeHTTP(httptest.NewRecorder(), followReq)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/users/2/follow", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected unfollow status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var followed struct {
+		Following bool `json:"following"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&followed); err != nil {
+		t.Fatalf("failed to decode unfollow response: %v", err)
+	}
+	if followed.Following {
+		t.Fatalf("expected following false, got %+v", followed)
+	}
+}
+
+func TestFollowUserRejectsSelf(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/users/1/follow", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestFollowUserReturnsNotFound(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/users/999/follow", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
 

@@ -38,6 +38,7 @@ export type UserProfileApiResponse = {
     training_frequency_days?: number;
     trainingFrequencyDays?: number;
     tags?: Array<{ id: number; label: string }>;
+    following?: boolean;
   };
 };
 
@@ -144,5 +145,6 @@ export const mapApiProfileToProfile = (profile: NonNullable<UserProfileApiRespon
     logs: [],
     tags: toProfileTags(profile.tags),
     inactivityDays: profile.trainingFrequencyDays ?? profile.training_frequency_days,
+    isFollowing: profile.following,
   };
 };

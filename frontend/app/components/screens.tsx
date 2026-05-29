@@ -201,6 +201,9 @@ export function ProfileScreen({
   recordErrorMessage,
   onUpdate,
   onSignout,
+  onFollowToggle,
+  onOpenConnection,
+  followUpdating = false,
 }: {
   profile: Profile;
   own?: boolean;
@@ -208,6 +211,9 @@ export function ProfileScreen({
   recordErrorMessage?: string;
   onUpdate?: (profile: Profile) => void;
   onSignout?: () => void;
+  onFollowToggle?: () => void;
+  onOpenConnection?: (connection: Connection) => void;
+  followUpdating?: boolean;
 }) {
   const [panel, setPanel] = useState<"summary" | "edit" | "following" | "followers">("summary");
   const [inactiveDays, setInactiveDays] = useState<number | null>(null);
@@ -241,6 +247,7 @@ export function ProfileScreen({
         people={people}
         title={panel === "following" ? "フォロー" : "フォロワー"}
         onBack={() => setPanel("summary")}
+        onOpenConnection={onOpenConnection}
       />
     );
   }
@@ -258,6 +265,10 @@ export function ProfileScreen({
         <h1>プロフィール</h1>
         {own ? (
           <button className={styles.edit} onClick={() => setPanel("edit")} type="button">編集</button>
+        ) : onFollowToggle ? (
+          <button className={styles.edit} disabled={followUpdating} onClick={onFollowToggle} type="button">
+            {followUpdating ? "更新中" : profile.isFollowing ? "フォロー解除" : "フォロー"}
+          </button>
         ) : (
           <span className={styles.headerSpacer} />
         )}
@@ -443,10 +454,12 @@ export function ConnectionsScreen({
   people,
   title,
   onBack,
+  onOpenConnection,
 }: {
   people: Connection[];
   title: string;
   onBack: () => void;
+  onOpenConnection?: (connection: Connection) => void;
 }) {
   return (
     <section className={styles.profileScreen}>
@@ -461,9 +474,15 @@ export function ConnectionsScreen({
         <p className={styles.connectionCount}>{people.length}人</p>
         {people.map((person) => (
           <article className={styles.connection} key={person.handle}>
-            <div className={`${styles.avatar} ${styles[person.tone]}`}>
+            <button
+              className={`${styles.avatar} ${styles[person.tone]}`}
+              disabled={!person.userId || !onOpenConnection}
+              onClick={() => onOpenConnection?.(person)}
+              type="button"
+              aria-label={`${person.name}のプロフィールを見る`}
+            >
               <UserIcon />
-            </div>
+            </button>
             <div>
               <strong>{person.name}</strong>
               <span>{person.handle}</span>

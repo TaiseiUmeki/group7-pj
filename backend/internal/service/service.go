@@ -30,6 +30,7 @@ type ProfileView struct {
 	Bio                   *string          `json:"bio,omitempty"`
 	TrainingFrequencyDays int              `json:"training_frequency_days"`
 	Tags                  []ProfileTagView `json:"tags"`
+	Following             *bool            `json:"following,omitempty"`
 }
 
 var profileTagLabels = map[int]string{
