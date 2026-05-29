@@ -50,6 +50,13 @@ type Repository interface {
 	CreatePostLike(postID int, userID int) error
 	DeletePostLike(postID int, userID int) error
 	GetPostLikeStatus(postID int, userID int) (PostLikeStatus, error)
+
+	// Follow関連
+	CreateFollow(followerUserID int, followeeUserID int) error
+	DeleteFollow(followerUserID int, followeeUserID int) error
+	GetFollowStatus(followerUserID int, followeeUserID int) (FollowStatus, error)
+	ListFollowingProfiles(userID int) ([]FollowConnectionRow, error)
+	ListFollowerProfiles(userID int) ([]FollowConnectionRow, error)
 }
 
 type TimelineQuery struct {
@@ -86,6 +93,15 @@ type TimelinePostRow struct {
 type PostLikeStatus struct {
 	LikeCount int  `json:"likeCount"`
 	LikedByMe bool `json:"likedByMe"`
+}
+
+type FollowStatus struct {
+	Following bool `json:"following"`
+}
+
+type FollowConnectionRow struct {
+	UserID   int
+	Username string
 }
 
 // MySQLRepository はMySQL用のRepository実装です
@@ -350,6 +366,80 @@ func (r *MySQLRepository) GetPostLikeStatus(postID int, userID int) (PostLikeSta
 		LikeCount: int(likeCount),
 		LikedByMe: err == nil,
 	}, nil
+}
+
+func (r *MySQLRepository) CreateFollow(followerUserID int, followeeUserID int) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := ensureUserExists(tx, followeeUserID); err != nil {
+			return err
+		}
+
+		var existing model.Follow
+		err := tx.Where("follower_user_id = ? AND followee_user_id = ?", followerUserID, followeeUserID).First(&existing).Error
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		return tx.Create(&model.Follow{FollowerUserID: followerUserID, FolloweeUserID: followeeUserID}).Error
+	})
+}
+
+func (r *MySQLRepository) DeleteFollow(followerUserID int, followeeUserID int) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := ensureUserExists(tx, followeeUserID); err != nil {
+			return err
+		}
+		return tx.Where("follower_user_id = ? AND followee_user_id = ?", followerUserID, followeeUserID).Delete(&model.Follow{}).Error
+	})
+}
+
+func (r *MySQLRepository) GetFollowStatus(followerUserID int, followeeUserID int) (FollowStatus, error) {
+	if err := ensureUserExists(r.db, followeeUserID); err != nil {
+		return FollowStatus{}, err
+	}
+
+	var follow model.Follow
+	err := r.db.Where("follower_user_id = ? AND followee_user_id = ?", followerUserID, followeeUserID).First(&follow).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return FollowStatus{}, err
+	}
+	return FollowStatus{Following: err == nil}, nil
+}
+
+func (r *MySQLRepository) ListFollowingProfiles(userID int) ([]FollowConnectionRow, error) {
+	var rows []FollowConnectionRow
+	err := r.db.Table("follows AS f").
+		Select("p.user_id, p.username").
+		Joins("JOIN profiles AS p ON p.user_id = f.followee_user_id AND p.deleted_at IS NULL").
+		Where("f.follower_user_id = ?", userID).
+		Order("f.created_at DESC, f.id DESC").
+		Find(&rows).Error
+	return rows, err
+}
+
+func (r *MySQLRepository) ListFollowerProfiles(userID int) ([]FollowConnectionRow, error) {
+	var rows []FollowConnectionRow
+	err := r.db.Table("follows AS f").
+		Select("p.user_id, p.username").
+		Joins("JOIN profiles AS p ON p.user_id = f.follower_user_id AND p.deleted_at IS NULL").
+		Where("f.followee_user_id = ?", userID).
+		Order("f.created_at DESC, f.id DESC").
+		Find(&rows).Error
+	return rows, err
+}
+
+func ensureUserExists(db *gorm.DB, userID int) error {
+	var user model.User
+	err := db.Select("id").Where("id = ? AND deleted_at IS NULL", userID).First(&user).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrUserNotFound
+		}
+		return err
+	}
+	return nil
 }
 
 func ensureTrainingPostExists(db *gorm.DB, postID int) error {

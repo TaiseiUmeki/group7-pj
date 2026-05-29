@@ -904,6 +904,11 @@
 .connection .avatar {
   width: 48px;
   height: 48px;
+  border: 0;
+  cursor: pointer;
+}
+
+.connection .avatar:disabled {
   cursor: default;
 }
 

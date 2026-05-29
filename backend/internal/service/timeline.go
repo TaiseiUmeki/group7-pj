@@ -150,6 +150,22 @@ func (s *Service) GetUserProfile(userID int) (*ProfileView, error) {
 	return s.GetProfile(userID)
 }
 
+func (s *Service) GetUserProfileForViewer(viewerUserID int, targetUserID int) (*ProfileView, error) {
+	profile, err := s.GetProfile(targetUserID)
+	if err != nil {
+		return nil, err
+	}
+	if viewerUserID == targetUserID {
+		return profile, nil
+	}
+	status, err := s.repo.GetFollowStatus(viewerUserID, targetUserID)
+	if err != nil {
+		return nil, err
+	}
+	profile.Following = &status.Following
+	return profile, nil
+}
+
 func buildTimelinePostView(row repository.TimelinePostRow, tags []ProfileTagView) TimelinePostView {
 	var startedAt *string
 	if row.StartedAt != nil {
