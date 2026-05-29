@@ -47,6 +47,9 @@ type Repository interface {
 	CreateTrainingPost(post *model.TrainingPost) error
 	ListTimelinePosts(input TimelineQuery) ([]TimelinePostRow, error)
 	GetTimelinePostByID(postID int, currentUserID int) (*TimelinePostRow, error)
+	CreatePostLike(postID int, userID int) error
+	DeletePostLike(postID int, userID int) error
+	GetPostLikeStatus(postID int, userID int) (PostLikeStatus, error)
 }
 
 type TimelineQuery struct {
@@ -78,6 +81,11 @@ type TimelinePostRow struct {
 	TrainingFrequencyDays int
 	LikeCount             int
 	LikedByMe             bool
+}
+
+type PostLikeStatus struct {
+	LikeCount int  `json:"likeCount"`
+	LikedByMe bool `json:"likedByMe"`
 }
 
 // MySQLRepository はMySQL用のRepository実装です
@@ -293,6 +301,67 @@ func (r *MySQLRepository) GetTimelinePostByID(postID int, currentUserID int) (*T
 		return nil, err
 	}
 	return &row, nil
+}
+
+func (r *MySQLRepository) CreatePostLike(postID int, userID int) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := ensureTrainingPostExists(tx, postID); err != nil {
+			return err
+		}
+
+		var existing model.PostLike
+		err := tx.Where("post_id = ? AND user_id = ?", postID, userID).First(&existing).Error
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		return tx.Create(&model.PostLike{PostID: postID, UserID: userID}).Error
+	})
+}
+
+func (r *MySQLRepository) DeletePostLike(postID int, userID int) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := ensureTrainingPostExists(tx, postID); err != nil {
+			return err
+		}
+		return tx.Where("post_id = ? AND user_id = ?", postID, userID).Delete(&model.PostLike{}).Error
+	})
+}
+
+func (r *MySQLRepository) GetPostLikeStatus(postID int, userID int) (PostLikeStatus, error) {
+	if err := ensureTrainingPostExists(r.db, postID); err != nil {
+		return PostLikeStatus{}, err
+	}
+
+	var likeCount int64
+	if err := r.db.Model(&model.PostLike{}).Where("post_id = ?", postID).Count(&likeCount).Error; err != nil {
+		return PostLikeStatus{}, err
+	}
+
+	var liked model.PostLike
+	err := r.db.Where("post_id = ? AND user_id = ?", postID, userID).First(&liked).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return PostLikeStatus{}, err
+	}
+
+	return PostLikeStatus{
+		LikeCount: int(likeCount),
+		LikedByMe: err == nil,
+	}, nil
+}
+
+func ensureTrainingPostExists(db *gorm.DB, postID int) error {
+	var post model.TrainingPost
+	err := db.Select("id").Where("id = ? AND deleted_at IS NULL", postID).First(&post).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrTrainingPostNotFound
+		}
+		return err
+	}
+	return nil
 }
 
 func (r *MySQLRepository) ListTimelinePosts(input TimelineQuery) ([]TimelinePostRow, error) {

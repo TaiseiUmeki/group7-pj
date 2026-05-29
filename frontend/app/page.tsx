@@ -8,6 +8,11 @@ import { TimelineScreen } from "./components/screens";
 import type { Profile, TimelinePost, TimelineTab } from "./types/workout";
 import { mapTimelineItemToPost, type TimelineApiResponse } from "./utils/apiMappers";
 
+type PostLikeResponse = {
+  likedByMe: boolean;
+  likeCount: number;
+};
+
 export default function Home() {
   const router = useRouter();
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -74,10 +79,45 @@ export default function Home() {
     }
   };
 
-  const toggleLike = (postID: TimelinePost["id"]) => {
+  const toggleLike = async (postID: TimelinePost["id"]) => {
+    const token = window.localStorage.getItem("group7pj_token");
+    if (!token) {
+      setTimelineError("ログイン情報を確認できません。もう一度ログインしてください。");
+      return;
+    }
+
+    const liked = likedPostIDs.includes(postID);
+    const response = await fetch(`${apiUrl}/api/posts/${postID}/like`, {
+      method: liked ? "DELETE" : "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const payload = (await response.json().catch(() => null)) as PostLikeResponse | { error?: string } | null;
+    if (!response.ok || !payload || !("likedByMe" in payload)) {
+      const message = payload && "error" in payload ? payload.error : undefined;
+      setTimelineError(message || "いいねを更新できませんでした。");
+      return;
+    }
+
+    setTimelineError("");
     setLikedPostIDs((ids) => (
-      ids.includes(postID) ? ids.filter((id) => id !== postID) : [...ids, postID]
+      payload.likedByMe
+        ? Array.from(new Set([...ids, postID]))
+        : ids.filter((id) => id !== postID)
     ));
+    setTimelinePosts((posts) => {
+      const updatePosts = (items: TimelinePost[]) => items.map((post) => (
+        post.id === postID
+          ? { ...post, likes: payload.likedByMe ? Math.max(0, payload.likeCount - 1) : payload.likeCount }
+          : post
+      ));
+
+      return {
+        following: updatePosts(posts.following),
+        recommended: updatePosts(posts.recommended),
+      };
+    });
   };
 
   return (

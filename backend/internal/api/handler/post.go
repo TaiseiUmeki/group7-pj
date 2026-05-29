@@ -57,6 +57,60 @@ func (h *Handler) GetTrainingPost(c *gin.Context) {
 	c.JSON(http.StatusOK, post)
 }
 
+// LikeTrainingPost は投稿にいいねを作成します。
+func (h *Handler) LikeTrainingPost(c *gin.Context) {
+	user, err := h.currentUserFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	postID, err := strconv.Atoi(c.Param("postId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post id"})
+		return
+	}
+
+	status, err := h.service.LikeTrainingPost(postID, user.ID)
+	if err != nil {
+		if err == repository.ErrTrainingPostNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, status)
+}
+
+// UnlikeTrainingPost は投稿へのいいねを解除します。
+func (h *Handler) UnlikeTrainingPost(c *gin.Context) {
+	user, err := h.currentUserFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	postID, err := strconv.Atoi(c.Param("postId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post id"})
+		return
+	}
+
+	status, err := h.service.UnlikeTrainingPost(postID, user.ID)
+	if err != nil {
+		if err == repository.ErrTrainingPostNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, status)
+}
+
 // CreateTrainingPost はトレーニング報告投稿を作成します。
 func (h *Handler) CreateTrainingPost(c *gin.Context) {
 	user, err := h.currentUserFromContext(c)
