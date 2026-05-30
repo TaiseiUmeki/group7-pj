@@ -6,7 +6,12 @@ import { useRouter } from "next/navigation";
 import { AppShell } from "./components/AppShell";
 import { TimelineScreen } from "./components/screens";
 import type { Profile, TimelinePost, TimelineTab } from "./types/workout";
-import { mapTimelineItemToPost, type TimelineApiResponse } from "./utils/apiMappers";
+import {
+  mapRecommendationItemToProfile,
+  mapTimelineItemToPost,
+  type RecommendationsApiResponse,
+  type TimelineApiResponse,
+} from "./utils/apiMappers";
 
 type PostLikeResponse = {
   likedByMe: boolean;
@@ -24,6 +29,10 @@ export default function Home() {
   });
   const [loadingTimeline, setLoadingTimeline] = useState(false);
   const [timelineError, setTimelineError] = useState("");
+  const [recommendedUsers, setRecommendedUsers] = useState<Profile[]>([]);
+  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
+  const [recommendationsError, setRecommendationsError] = useState("");
+  const [followingRecommendationIDs, setFollowingRecommendationIDs] = useState<number[]>([]);
 
   const loadTimeline = useCallback(async (source: TimelineTab) => {
     const token = window.localStorage.getItem("group7pj_token");
@@ -69,9 +78,44 @@ export default function Home() {
     }
   }, [apiUrl]);
 
+  const loadRecommendations = useCallback(async () => {
+    const token = window.localStorage.getItem("group7pj_token");
+
+    if (!token) {
+      setRecommendedUsers([]);
+      setRecommendationsError("");
+      return;
+    }
+
+    setLoadingRecommendations(true);
+    setRecommendationsError("");
+
+    try {
+      const response = await fetch(`${apiUrl}/api/recommendations`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const payload = (await response.json().catch(() => null)) as RecommendationsApiResponse | { error?: string } | null;
+      if (!response.ok || !payload || !("items" in payload)) {
+        const message = payload && "error" in payload ? payload.error : undefined;
+        throw new Error(message || "おすすめユーザーを読み込めませんでした。");
+      }
+
+      setRecommendedUsers(payload.items.filter((item) => !item.isFollowing).slice(0, 5).map(mapRecommendationItemToProfile));
+    } catch (error) {
+      setRecommendationsError(error instanceof Error ? error.message : "おすすめユーザーを読み込めませんでした。");
+    } finally {
+      setLoadingRecommendations(false);
+    }
+  }, [apiUrl]);
+
   useEffect(() => {
     void loadTimeline(activeTab);
-  }, [activeTab, loadTimeline]);
+    if (activeTab === "recommended") {
+      void loadRecommendations();
+    }
+  }, [activeTab, loadRecommendations, loadTimeline]);
 
   const openMemberProfile = (profile: Profile) => {
     if (profile.userId) {
@@ -120,6 +164,37 @@ export default function Home() {
     });
   };
 
+  const followRecommendation = async (profile: Profile) => {
+    const token = window.localStorage.getItem("group7pj_token");
+    if (!token || !profile.userId) {
+      setRecommendationsError("ログイン情報を確認できません。もう一度ログインしてください。");
+      return;
+    }
+
+    setFollowingRecommendationIDs((ids) => Array.from(new Set([...ids, profile.userId as number])));
+
+    try {
+      const response = await fetch(`${apiUrl}/api/users/${profile.userId}/follow`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const payload = (await response.json().catch(() => null)) as { following?: boolean; error?: string } | null;
+      if (!response.ok || !payload?.following) {
+        throw new Error(payload?.error || "フォローできませんでした。");
+      }
+
+      setRecommendationsError("");
+      setRecommendedUsers((users) => users.filter((user) => user.userId !== profile.userId));
+      void loadTimeline("recommended");
+    } catch (error) {
+      setRecommendationsError(error instanceof Error ? error.message : "フォローできませんでした。");
+    } finally {
+      setFollowingRecommendationIDs((ids) => ids.filter((id) => id !== profile.userId));
+    }
+  };
+
   return (
     <AppShell activeView="timeline">
       <TimelineScreen
@@ -132,6 +207,11 @@ export default function Home() {
         timelinePosts={timelinePosts[activeTab]}
         loadingTimeline={loadingTimeline}
         timelineError={timelineError}
+        recommendedUsers={recommendedUsers}
+        loadingRecommendations={loadingRecommendations}
+        recommendationsError={recommendationsError}
+        followingRecommendationIDs={followingRecommendationIDs}
+        onFollowRecommendation={followRecommendation}
         onCreateRecord={() => router.push("/posts/new")}
       />
     </AppShell>

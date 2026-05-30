@@ -28,6 +28,11 @@ export function TimelineScreen({
   timelinePosts,
   loadingTimeline,
   timelineError,
+  recommendedUsers,
+  loadingRecommendations,
+  recommendationsError,
+  followingRecommendationIDs,
+  onFollowRecommendation,
   onCreateRecord,
 }: {
   activeTab: TimelineTab;
@@ -39,9 +44,19 @@ export function TimelineScreen({
   timelinePosts: TimelinePost[];
   loadingTimeline: boolean;
   timelineError: string;
+  recommendedUsers: Profile[];
+  loadingRecommendations: boolean;
+  recommendationsError: string;
+  followingRecommendationIDs: number[];
+  onFollowRecommendation: (profile: Profile) => void;
   onCreateRecord: () => void;
 }) {
   const posts = timelinePosts;
+  const todayLabel = new Intl.DateTimeFormat("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 
   return (
     <>
@@ -62,6 +77,57 @@ export function TimelineScreen({
         </button>
       </header>
       <section className={styles.timeline} aria-label="投稿一覧">
+        {activeTab === "recommended" ? (
+          <section className={styles.recommendationPanel} aria-label="おすすめユーザー">
+            <div className={styles.recommendationHeader}>
+              <h2>おすすめユーザー</h2>
+              <span>今日の5人・{todayLabel}</span>
+            </div>
+            {recommendationsError ? <p className={styles.emptyState}>{recommendationsError}</p> : null}
+            {loadingRecommendations ? <p className={styles.emptyState}>おすすめユーザーを読み込んでいます...</p> : null}
+            {!loadingRecommendations && recommendedUsers.length === 0 && !recommendationsError ? (
+              <p className={styles.emptyState}>表示できるおすすめユーザーはまだありません。</p>
+            ) : null}
+            {recommendedUsers.length > 0 ? (
+              <div className={styles.recommendationList}>
+                {recommendedUsers.map((profile) => {
+                  const updating = Boolean(profile.userId && followingRecommendationIDs.includes(profile.userId));
+                  return (
+                    <article className={styles.recommendationItem} key={profile.userId ?? profile.handle}>
+                      <button
+                        className={`${styles.avatar} ${styles[profile.tone]}`}
+                        aria-label={`${profile.name}のプロフィールを見る`}
+                        onClick={() => onOpenProfile(profile)}
+                        type="button"
+                      >
+                        <UserIcon />
+                      </button>
+                      <div className={styles.recommendationBody}>
+                        <button className={styles.author} onClick={() => onOpenProfile(profile)} type="button">
+                          {profile.name}
+                        </button>
+                        <span>{profile.handle}</span>
+                        {profile.tags && profile.tags.length > 0 ? (
+                          <div className={styles.recommendationTags}>
+                            {profile.tags.map((tag) => <span key={tag}>{tag}</span>)}
+                          </div>
+                        ) : null}
+                      </div>
+                      <button
+                        className={styles.followButton}
+                        disabled={updating}
+                        onClick={() => onFollowRecommendation(profile)}
+                        type="button"
+                      >
+                        {updating ? "更新中" : "フォロー"}
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
         {timelineError ? <p className={styles.emptyState}>{timelineError}</p> : null}
         {loadingTimeline ? <p className={styles.emptyState}>投稿を読み込んでいます...</p> : null}
         {!loadingTimeline && posts.length === 0 ? <p className={styles.emptyState}>表示できる投稿はまだありません。</p> : null}

@@ -48,6 +48,113 @@
   padding: 28px clamp(18px, 3vw, 32px);
 }
 
+.recommendationPanel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #dde5ef;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(22, 34, 54, 0.05);
+}
+
+.recommendationHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.recommendationHeader h2 {
+  margin: 0;
+  color: #172235;
+  font-size: 17px;
+}
+
+.recommendationHeader span {
+  color: #68768a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.recommendationList {
+  display: grid;
+  gap: 10px;
+}
+
+.recommendationItem {
+  min-height: 76px;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid #edf1f6;
+}
+
+.recommendationItem:first-child {
+  border-top: 0;
+}
+
+.recommendationItem .avatar {
+  width: 46px;
+  height: 46px;
+}
+
+.recommendationBody {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.recommendationBody .author {
+  width: fit-content;
+  max-width: 100%;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recommendationBody > span {
+  color: #6f7d91;
+  font-size: 12px;
+}
+
+.recommendationTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.recommendationTags span {
+  padding: 4px 8px;
+  border-radius: 12px;
+  background: #eef4ff;
+  color: #316cf0;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.followButton {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid #316cf0;
+  border-radius: 19px;
+  background: #316cf0;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.followButton:disabled {
+  border-color: #b8c3d3;
+  background: #b8c3d3;
+  cursor: not-allowed;
+}
+
 .post {
   display: flex;
   align-items: flex-start;
@@ -1241,6 +1348,25 @@
   .post {
     padding: 17px 15px;
     gap: 12px;
+  }
+
+  .recommendationPanel {
+    padding: 16px 14px;
+  }
+
+  .recommendationItem {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .recommendationItem .avatar {
+    width: 42px;
+    height: 42px;
+  }
+
+  .followButton {
+    grid-column: 2;
+    width: fit-content;
+    min-height: 34px;
   }
 
   .avatar {

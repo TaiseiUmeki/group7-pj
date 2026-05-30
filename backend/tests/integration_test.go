@@ -408,6 +408,35 @@ func (f *fakeRepo) ListFollowerProfiles(userID int) ([]repository.FollowConnecti
 	return rows, nil
 }
 
+func (f *fakeRepo) ListDailyRecommendationProfiles(input repository.RecommendationQuery) ([]repository.RecommendationRow, error) {
+	rows := []repository.RecommendationRow{}
+	for _, profile := range f.profilesByID {
+		if profile.UserID == input.UserID {
+			continue
+		}
+		if f.follows[input.UserID][profile.UserID] {
+			continue
+		}
+		rows = append(rows, repository.RecommendationRow{
+			ProfileID:    profile.ID,
+			UserID:       profile.UserID,
+			Username:     profile.Username,
+			Status:       1,
+			DisplayOrder: len(rows) + 1,
+		})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		return rows[i].UserID < rows[j].UserID
+	})
+	for i := range rows {
+		rows[i].DisplayOrder = i + 1
+	}
+	if input.Limit > 0 && len(rows) > input.Limit {
+		rows = rows[:input.Limit]
+	}
+	return rows, nil
+}
+
 func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 	t.Helper()
 
@@ -473,6 +502,7 @@ func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 	auth.POST("/users/:userId/follow", h.FollowUser)
 	auth.DELETE("/users/:userId/follow", h.UnfollowUser)
 	auth.GET("/timeline", h.GetTimeline)
+	auth.GET("/recommendations", h.GetRecommendations)
 	auth.POST("/workout-records", h.CreateWorkoutRecord)
 	auth.PUT("/workout-records/:id", h.UpdateWorkoutRecord)
 	auth.GET("/workout-records", h.ListWorkoutRecords)
@@ -567,6 +597,7 @@ func TestProtectedRoutesRequireBearerToken(t *testing.T) {
 		{name: "following", method: http.MethodGet, path: "/api/me/following"},
 		{name: "followers", method: http.MethodGet, path: "/api/me/followers"},
 		{name: "timeline", method: http.MethodGet, path: "/api/timeline?source=following"},
+		{name: "recommendations", method: http.MethodGet, path: "/api/recommendations"},
 		{name: "workout records", method: http.MethodGet, path: "/api/workout-records"},
 		{name: "create workout record", method: http.MethodPost, path: "/api/workout-records", body: `{}`},
 		{name: "create post", method: http.MethodPost, path: "/api/posts", body: `{"didTrain":true,"trainedOn":"2026-05-28"}`},
@@ -878,6 +909,79 @@ func TestGetMyFollowers(t *testing.T) {
 	}
 	if len(resp.Items) != 0 {
 		t.Fatalf("expected empty followers response, got %+v", resp)
+	}
+}
+
+func TestGetRecommendations(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/recommendations", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected recommendations status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Items []struct {
+			User struct {
+				ID       int    `json:"id"`
+				Username string `json:"username"`
+				Tags     []struct {
+					ID    int    `json:"id"`
+					Label string `json:"label"`
+				} `json:"tags"`
+			} `json:"user"`
+			Status      int    `json:"status"`
+			StatusLabel string `json:"statusLabel"`
+			IsFollowing bool   `json:"isFollowing"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode recommendations response: %v", err)
+	}
+	if len(resp.Items) != 1 {
+		t.Fatalf("expected one recommendation, got %+v", resp)
+	}
+	item := resp.Items[0]
+	if item.User.ID != 2 || item.User.Username != "Timeline Author" || item.Status != 1 || item.StatusLabel == "" || item.IsFollowing {
+		t.Fatalf("unexpected recommendation item: %+v", item)
+	}
+	if len(item.User.Tags) != 2 || item.User.Tags[0].ID != 2 || item.User.Tags[1].ID != 5 {
+		t.Fatalf("unexpected recommendation tags: %+v", item.User.Tags)
+	}
+}
+
+func TestGetRecommendationsExcludesFollowedUsers(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	followReq := httptest.NewRequest(http.MethodPost, "/api/users/2/follow", nil)
+	followReq.Header.Set("Authorization", "Bearer "+token)
+	router.ServeHTTP(httptest.NewRecorder(), followReq)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/recommendations", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected recommendations status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Items []struct {
+			User struct {
+				ID int `json:"id"`
+			} `json:"user"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode recommendations response: %v", err)
+	}
+	if len(resp.Items) != 0 {
+		t.Fatalf("expected followed users to be excluded, got %+v", resp)
 	}
 }
 

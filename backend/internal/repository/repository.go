@@ -57,6 +57,7 @@ type Repository interface {
 	GetFollowStatus(followerUserID int, followeeUserID int) (FollowStatus, error)
 	ListFollowingProfiles(userID int) ([]FollowConnectionRow, error)
 	ListFollowerProfiles(userID int) ([]FollowConnectionRow, error)
+	ListDailyRecommendationProfiles(input RecommendationQuery) ([]RecommendationRow, error)
 }
 
 type TimelineQuery struct {
@@ -102,6 +103,20 @@ type FollowStatus struct {
 type FollowConnectionRow struct {
 	UserID   int
 	Username string
+}
+
+type RecommendationQuery struct {
+	UserID      int
+	CurrentDate time.Time
+	Limit       int
+}
+
+type RecommendationRow struct {
+	ProfileID    int
+	UserID       int
+	Username     string
+	Status       int
+	DisplayOrder int
 }
 
 // MySQLRepository はMySQL用のRepository実装です
@@ -377,12 +392,15 @@ func (r *MySQLRepository) CreateFollow(followerUserID int, followeeUserID int) e
 		var existing model.Follow
 		err := tx.Where("follower_user_id = ? AND followee_user_id = ?", followerUserID, followeeUserID).First(&existing).Error
 		if err == nil {
-			return nil
+			return markRecommendationSlotFollowed(tx, followerUserID, followeeUserID)
 		}
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
-		return tx.Create(&model.Follow{FollowerUserID: followerUserID, FolloweeUserID: followeeUserID}).Error
+		if err := tx.Create(&model.Follow{FollowerUserID: followerUserID, FolloweeUserID: followeeUserID}).Error; err != nil {
+			return err
+		}
+		return markRecommendationSlotFollowed(tx, followerUserID, followeeUserID)
 	})
 }
 
@@ -430,6 +448,78 @@ func (r *MySQLRepository) ListFollowerProfiles(userID int) ([]FollowConnectionRo
 	return rows, err
 }
 
+func (r *MySQLRepository) ListDailyRecommendationProfiles(input RecommendationQuery) ([]RecommendationRow, error) {
+	slotDate := dateOnly(input.CurrentDate)
+	limit := input.Limit
+	if limit <= 0 {
+		limit = 5
+	}
+
+	if err := r.db.Transaction(func(tx *gorm.DB) error {
+		var count int64
+		if err := tx.Table("recommendation_slots AS rs").
+			Joins("JOIN profiles AS p ON p.user_id = rs.recommended_user_id AND p.deleted_at IS NULL").
+			Joins("LEFT JOIN follows AS f ON f.follower_user_id = rs.user_id AND f.followee_user_id = rs.recommended_user_id").
+			Where("rs.user_id = ? AND rs.slot_date = ? AND rs.status = 1 AND f.id IS NULL", input.UserID, slotDate).
+			Count(&count).Error; err != nil {
+			return err
+		}
+		if int(count) >= limit {
+			return nil
+		}
+
+		var maxOrder int
+		if err := tx.Model(&model.RecommendationSlot{}).
+			Where("user_id = ? AND slot_date = ?", input.UserID, slotDate).
+			Select("COALESCE(MAX(display_order), 0)").
+			Scan(&maxOrder).Error; err != nil {
+			return err
+		}
+
+		remaining := limit - int(count)
+		var candidates []struct {
+			UserID int
+		}
+		if err := tx.Table("profiles AS p").
+			Select("p.user_id").
+			Joins("JOIN users AS u ON u.id = p.user_id AND u.deleted_at IS NULL").
+			Joins("LEFT JOIN follows AS f ON f.follower_user_id = ? AND f.followee_user_id = p.user_id", input.UserID).
+			Joins("LEFT JOIN recommendation_slots AS rs ON rs.user_id = ? AND rs.recommended_user_id = p.user_id AND rs.slot_date = ?", input.UserID, slotDate).
+			Where("p.deleted_at IS NULL AND p.user_id <> ? AND f.id IS NULL AND rs.id IS NULL", input.UserID).
+			Order("RAND()").
+			Limit(remaining).
+			Find(&candidates).Error; err != nil {
+			return err
+		}
+
+		for i, candidate := range candidates {
+			if err := tx.Create(&model.RecommendationSlot{
+				UserID:            input.UserID,
+				RecommendedUserID: candidate.UserID,
+				SlotDate:          slotDate,
+				DisplayOrder:      maxOrder + i + 1,
+				Status:            1,
+			}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	var rows []RecommendationRow
+	err := r.db.Table("recommendation_slots AS rs").
+		Select("p.id AS profile_id, p.user_id, p.username, rs.status, rs.display_order").
+		Joins("JOIN profiles AS p ON p.user_id = rs.recommended_user_id AND p.deleted_at IS NULL").
+		Joins("LEFT JOIN follows AS f ON f.follower_user_id = rs.user_id AND f.followee_user_id = rs.recommended_user_id").
+		Where("rs.user_id = ? AND rs.slot_date = ? AND rs.status = 1 AND f.id IS NULL", input.UserID, slotDate).
+		Order("rs.display_order ASC, rs.id ASC").
+		Limit(limit).
+		Find(&rows).Error
+	return rows, err
+}
+
 func ensureUserExists(db *gorm.DB, userID int) error {
 	var user model.User
 	err := db.Select("id").Where("id = ? AND deleted_at IS NULL", userID).First(&user).Error
@@ -454,6 +544,12 @@ func ensureTrainingPostExists(db *gorm.DB, postID int) error {
 	return nil
 }
 
+func markRecommendationSlotFollowed(db *gorm.DB, userID int, recommendedUserID int) error {
+	return db.Model(&model.RecommendationSlot{}).
+		Where("user_id = ? AND recommended_user_id = ? AND status = 1", userID, recommendedUserID).
+		Update("status", 2).Error
+}
+
 func (r *MySQLRepository) ListTimelinePosts(input TimelineQuery) ([]TimelinePostRow, error) {
 	query := r.timelinePostBaseQuery(input.UserID).
 		Where("tp.user_id <> ?", input.UserID)
@@ -464,8 +560,14 @@ func (r *MySQLRepository) ListTimelinePosts(input TimelineQuery) ([]TimelinePost
 			Joins("JOIN follows AS f ON f.followee_user_id = tp.user_id AND f.follower_user_id = ?", input.UserID).
 			Where("tp.visibility IN ?", []string{"followers", "followers_and_recommended"})
 	case "recommended":
+		recommendedSlots := r.db.Table("recommendation_slots AS rs").
+			Select("rs.recommended_user_id").
+			Joins("LEFT JOIN follows AS f ON f.follower_user_id = rs.user_id AND f.followee_user_id = rs.recommended_user_id").
+			Where("rs.user_id = ? AND rs.slot_date = ? AND rs.status = 1 AND f.id IS NULL", input.UserID, dateOnly(input.CurrentDate)).
+			Order("rs.display_order ASC, rs.id ASC").
+			Limit(5)
 		query = query.
-			Joins("JOIN recommendation_slots AS rs ON rs.recommended_user_id = tp.user_id AND rs.user_id = ? AND rs.slot_date = ? AND rs.status = 1", input.UserID, dateOnly(input.CurrentDate)).
+			Joins("JOIN (?) AS rec ON rec.recommended_user_id = tp.user_id", recommendedSlots).
 			Where("tp.visibility IN ?", []string{"recommended", "followers_and_recommended"})
 	default:
 		return nil, errors.New("invalid timeline source")

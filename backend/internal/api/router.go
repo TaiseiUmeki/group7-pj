@@ -49,6 +49,7 @@ func NewRouter(db *gorm.DB, jwtSecret string) http.Handler {
 	auth.DELETE("/users/:userId/follow", h.UnfollowUser)
 
 	auth.GET("/timeline", h.GetTimeline)
+	auth.GET("/recommendations", h.GetRecommendations)
 
 	auth.GET("/workout-records", h.ListWorkoutRecords)
 	auth.POST("/workout-records", h.CreateWorkoutRecord)
@@ -61,7 +62,7 @@ func NewRouter(db *gorm.DB, jwtSecret string) http.Handler {
 	auth.POST("/posts/:postId/like", h.LikeTrainingPost)
 	auth.DELETE("/posts/:postId/like", h.UnlikeTrainingPost)
 
-	log.Println("Registered routes: /health, /api/auth/login, /api/auth/me, /api/me/profile, /api/users, /api/workout-records, /api/posts")
+	log.Println("Registered routes: /health, /api/auth/login, /api/auth/me, /api/me/profile, /api/users, /api/timeline, /api/recommendations, /api/workout-records, /api/posts")
 
 	return r
 }

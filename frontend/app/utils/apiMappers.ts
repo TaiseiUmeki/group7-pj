@@ -42,6 +42,21 @@ export type UserProfileApiResponse = {
   };
 };
 
+export type RecommendationsApiResponse = {
+  items: RecommendationApiItem[];
+};
+
+export type RecommendationApiItem = {
+  user: {
+    id: number;
+    username: string;
+    tags?: Array<{ id: number; label: string }>;
+  };
+  status: number;
+  statusLabel: string;
+  isFollowing: boolean;
+};
+
 const toneByUserID = (userID: number): Profile["tone"] => {
   const tones: Profile["tone"][] = ["blue", "green", "purple"];
   return tones[Math.abs(userID) % tones.length];
@@ -148,3 +163,17 @@ export const mapApiProfileToProfile = (profile: NonNullable<UserProfileApiRespon
     isFollowing: profile.following,
   };
 };
+
+export const mapRecommendationItemToProfile = (item: RecommendationApiItem): Profile => ({
+  userId: item.user.id,
+  name: item.user.username,
+  handle: `@user-${item.user.id}`,
+  bio: "プロフィール未設定",
+  tone: toneByUserID(item.user.id),
+  records: "-",
+  streak: "-",
+  achievements: item.statusLabel,
+  logs: [],
+  tags: toProfileTags(item.user.tags),
+  isFollowing: item.isFollowing,
+});
