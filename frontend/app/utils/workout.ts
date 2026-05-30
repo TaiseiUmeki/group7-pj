@@ -72,6 +72,7 @@ export function formatWorkoutLog(record: WorkoutRecord): TrainingLog {
 
   return {
     id: `workout-${record.id}`,
+    postId: record.id,
     date,
     exercise,
     detail,

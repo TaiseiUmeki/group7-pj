@@ -7,6 +7,7 @@ export type BodyPart = "胸" | "背中" | "脚" | "肩" | "腕" | "体幹";
 
 export type TrainingLog = {
   id: string;
+  postId?: number;
   date: string;
   exercise: string;
   detail: string;

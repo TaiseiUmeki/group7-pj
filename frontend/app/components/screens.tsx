@@ -203,6 +203,7 @@ export function ProfileScreen({
   onSignout,
   onFollowToggle,
   onOpenConnection,
+  onOpenLog,
   followUpdating = false,
 }: {
   profile: Profile;
@@ -213,6 +214,7 @@ export function ProfileScreen({
   onSignout?: () => void;
   onFollowToggle?: () => void;
   onOpenConnection?: (connection: Connection) => void;
+  onOpenLog?: (postId: number) => void;
   followUpdating?: boolean;
 }) {
   const [panel, setPanel] = useState<"summary" | "edit" | "following" | "followers">("summary");
@@ -338,13 +340,30 @@ export function ProfileScreen({
         {recordErrorMessage ? <p className={styles.profileNotice}>{recordErrorMessage}</p> : null}
         <div className={styles.logs}>
           {profile.logs.length > 0 ? (
-            profile.logs.map((log) => (
-              <article className={styles.log} key={log.id}>
-                <time>{log.date}</time>
-                <strong>{log.exercise}</strong>
-                <p>{log.detail}</p>
-              </article>
-            ))
+            profile.logs.map((log) => {
+              const content = (
+                <>
+                  <time>{log.date}</time>
+                  <strong>{log.exercise}</strong>
+                  <p>{log.detail}</p>
+                </>
+              );
+
+              return log.postId && onOpenLog ? (
+                <button
+                  className={styles.log}
+                  key={log.id}
+                  onClick={() => onOpenLog(log.postId!)}
+                  type="button"
+                >
+                  {content}
+                </button>
+              ) : (
+                <article className={styles.log} key={log.id}>
+                  {content}
+                </article>
+              );
+            })
           ) : (
             <p className={styles.emptyState}>まだトレーニング記録がありません。</p>
           )}
