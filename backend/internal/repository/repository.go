@@ -38,6 +38,7 @@ type Repository interface {
 	// WorkoutRecord関連
 	GetWorkoutRecordByIDAndUserID(id, userID int) (*model.WorkoutRecord, error)
 	GetWorkoutRecordsByUserID(userID int) ([]*model.WorkoutRecord, error)
+	GetVisibleWorkoutRecordsByUserID(userID int, viewerUserID int, currentDate time.Time) ([]*model.WorkoutRecord, error)
 	GetLatestWorkoutRecordByUserID(userID int) (*model.WorkoutRecord, error)
 	CreateWorkoutRecord(record *model.WorkoutRecord) error
 	UpdateWorkoutRecord(record *model.WorkoutRecord) error
@@ -254,6 +255,48 @@ func (r *MySQLRepository) GetWorkoutRecordsByUserID(userID int) ([]*model.Workou
 	if err := r.db.Where("user_id = ? AND deleted_at IS NULL", userID).Order("trained_on DESC, created_at DESC").Find(&posts).Error; err != nil {
 		return nil, err
 	}
+	records := make([]*model.WorkoutRecord, 0, len(posts))
+	for _, post := range posts {
+		records = append(records, workoutRecordFromTrainingPost(post))
+	}
+	return records, nil
+}
+
+// GetVisibleWorkoutRecordsByUserID returns workout records visible to the viewer.
+func (r *MySQLRepository) GetVisibleWorkoutRecordsByUserID(userID int, viewerUserID int, currentDate time.Time) ([]*model.WorkoutRecord, error) {
+	if userID == viewerUserID {
+		return r.GetWorkoutRecordsByUserID(userID)
+	}
+
+	var posts []*model.TrainingPost
+	err := r.db.
+		Where("user_id = ? AND deleted_at IS NULL", userID).
+		Where(`
+			visibility = ?
+			OR (
+				visibility = ?
+				AND EXISTS (
+					SELECT 1 FROM follows AS f
+					WHERE f.follower_user_id = ? AND f.followee_user_id = training_posts.user_id
+				)
+			)
+			OR (
+				visibility = ?
+				AND EXISTS (
+					SELECT 1 FROM recommendation_slots AS rs
+					WHERE rs.user_id = ?
+						AND rs.recommended_user_id = training_posts.user_id
+						AND rs.slot_date = ?
+						AND rs.status IN ?
+				)
+			)
+		`, "followers_and_recommended", "followers", viewerUserID, "recommended", viewerUserID, dateOnly(currentDate), []int{1, 2}).
+		Order("trained_on DESC, created_at DESC").
+		Find(&posts).Error
+	if err != nil {
+		return nil, err
+	}
+
 	records := make([]*model.WorkoutRecord, 0, len(posts))
 	for _, post := range posts {
 		records = append(records, workoutRecordFromTrainingPost(post))

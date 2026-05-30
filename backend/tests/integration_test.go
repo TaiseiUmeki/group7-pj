@@ -174,6 +174,10 @@ func (f *fakeRepo) GetWorkoutRecordsByUserID(userID int) ([]*model.WorkoutRecord
 	return records, nil
 }
 
+func (f *fakeRepo) GetVisibleWorkoutRecordsByUserID(userID int, viewerUserID int, currentDate time.Time) ([]*model.WorkoutRecord, error) {
+	return f.GetWorkoutRecordsByUserID(userID)
+}
+
 func (f *fakeRepo) GetLatestWorkoutRecordByUserID(userID int) (*model.WorkoutRecord, error) {
 	var latest *model.WorkoutRecord
 	for _, record := range f.recordsByID {
@@ -502,6 +506,7 @@ func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 	auth.GET("/me/following", h.GetMyFollowing)
 	auth.GET("/me/followers", h.GetMyFollowers)
 	auth.GET("/users/:userId", h.GetUserProfile)
+	auth.GET("/users/:userId/workout-records", h.ListUserWorkoutRecords)
 	auth.POST("/users/:userId/follow", h.FollowUser)
 	auth.DELETE("/users/:userId/follow", h.UnfollowUser)
 	auth.GET("/timeline", h.GetTimeline)
