@@ -401,9 +401,11 @@ func Run(db *gorm.DB) error {
 			return err
 		}
 	}
+	// 测试用
 	// if err := deleteTodayRecommendationSlotsForUsers(db, owner.ID, notPreselectedRecommendationUserIDs); err != nil {
 	// 	return err
 	// }
+
 	if err := deleteSeedFollowsForUsers(db, owner.ID, notFollowedUserIDs); err != nil {
 		return err
 	}

@@ -414,15 +414,18 @@ func (f *fakeRepo) ListDailyRecommendationProfiles(input repository.Recommendati
 		if profile.UserID == input.UserID {
 			continue
 		}
-		if f.follows[input.UserID][profile.UserID] {
-			continue
+		following := f.follows[input.UserID][profile.UserID]
+		status := 1
+		if following {
+			status = 2
 		}
 		rows = append(rows, repository.RecommendationRow{
 			ProfileID:    profile.ID,
 			UserID:       profile.UserID,
 			Username:     profile.Username,
-			Status:       1,
+			Status:       status,
 			DisplayOrder: len(rows) + 1,
+			Following:    following,
 		})
 	}
 	sort.Slice(rows, func(i, j int) bool {
@@ -954,7 +957,7 @@ func TestGetRecommendations(t *testing.T) {
 	}
 }
 
-func TestGetRecommendationsExcludesFollowedUsers(t *testing.T) {
+func TestGetRecommendationsKeepsFollowedUsersInDailySlots(t *testing.T) {
 	router, _, _ := newTestRouter(t)
 	token := loginToken(t, router)
 
@@ -975,13 +978,15 @@ func TestGetRecommendationsExcludesFollowedUsers(t *testing.T) {
 			User struct {
 				ID int `json:"id"`
 			} `json:"user"`
+			Status      int  `json:"status"`
+			IsFollowing bool `json:"isFollowing"`
 		} `json:"items"`
 	}
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode recommendations response: %v", err)
 	}
-	if len(resp.Items) != 0 {
-		t.Fatalf("expected followed users to be excluded, got %+v", resp)
+	if len(resp.Items) != 1 || resp.Items[0].User.ID != 2 || !resp.Items[0].IsFollowing || resp.Items[0].Status != 2 {
+		t.Fatalf("expected followed user to stay in recommendations, got %+v", resp)
 	}
 }
 

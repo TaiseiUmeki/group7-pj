@@ -117,6 +117,7 @@ type RecommendationRow struct {
 	Username     string
 	Status       int
 	DisplayOrder int
+	Following    bool
 }
 
 // MySQLRepository はMySQL用のRepository実装です
@@ -409,7 +410,10 @@ func (r *MySQLRepository) DeleteFollow(followerUserID int, followeeUserID int) e
 		if err := ensureUserExists(tx, followeeUserID); err != nil {
 			return err
 		}
-		return tx.Where("follower_user_id = ? AND followee_user_id = ?", followerUserID, followeeUserID).Delete(&model.Follow{}).Error
+		if err := tx.Where("follower_user_id = ? AND followee_user_id = ?", followerUserID, followeeUserID).Delete(&model.Follow{}).Error; err != nil {
+			return err
+		}
+		return markRecommendationSlotActive(tx, followerUserID, followeeUserID)
 	})
 }
 
@@ -459,8 +463,7 @@ func (r *MySQLRepository) ListDailyRecommendationProfiles(input RecommendationQu
 		var count int64
 		if err := tx.Table("recommendation_slots AS rs").
 			Joins("JOIN profiles AS p ON p.user_id = rs.recommended_user_id AND p.deleted_at IS NULL").
-			Joins("LEFT JOIN follows AS f ON f.follower_user_id = rs.user_id AND f.followee_user_id = rs.recommended_user_id").
-			Where("rs.user_id = ? AND rs.slot_date = ? AND rs.status = 1 AND f.id IS NULL", input.UserID, slotDate).
+			Where("rs.user_id = ? AND rs.slot_date = ? AND rs.status IN ?", input.UserID, slotDate, []int{1, 2}).
 			Count(&count).Error; err != nil {
 			return err
 		}
@@ -510,10 +513,17 @@ func (r *MySQLRepository) ListDailyRecommendationProfiles(input RecommendationQu
 
 	var rows []RecommendationRow
 	err := r.db.Table("recommendation_slots AS rs").
-		Select("p.id AS profile_id, p.user_id, p.username, rs.status, rs.display_order").
+		Select(`
+			p.id AS profile_id,
+			p.user_id,
+			p.username,
+			CASE WHEN f.id IS NULL THEN rs.status ELSE 2 END AS status,
+			rs.display_order,
+			CASE WHEN f.id IS NULL THEN FALSE ELSE TRUE END AS following
+		`).
 		Joins("JOIN profiles AS p ON p.user_id = rs.recommended_user_id AND p.deleted_at IS NULL").
 		Joins("LEFT JOIN follows AS f ON f.follower_user_id = rs.user_id AND f.followee_user_id = rs.recommended_user_id").
-		Where("rs.user_id = ? AND rs.slot_date = ? AND rs.status = 1 AND f.id IS NULL", input.UserID, slotDate).
+		Where("rs.user_id = ? AND rs.slot_date = ? AND rs.status IN ?", input.UserID, slotDate, []int{1, 2}).
 		Order("rs.display_order ASC, rs.id ASC").
 		Limit(limit).
 		Find(&rows).Error
@@ -550,6 +560,12 @@ func markRecommendationSlotFollowed(db *gorm.DB, userID int, recommendedUserID i
 		Update("status", 2).Error
 }
 
+func markRecommendationSlotActive(db *gorm.DB, userID int, recommendedUserID int) error {
+	return db.Model(&model.RecommendationSlot{}).
+		Where("user_id = ? AND recommended_user_id = ? AND status = 2", userID, recommendedUserID).
+		Update("status", 1).Error
+}
+
 func (r *MySQLRepository) ListTimelinePosts(input TimelineQuery) ([]TimelinePostRow, error) {
 	query := r.timelinePostBaseQuery(input.UserID).
 		Where("tp.user_id <> ?", input.UserID)
@@ -562,8 +578,7 @@ func (r *MySQLRepository) ListTimelinePosts(input TimelineQuery) ([]TimelinePost
 	case "recommended":
 		recommendedSlots := r.db.Table("recommendation_slots AS rs").
 			Select("rs.recommended_user_id").
-			Joins("LEFT JOIN follows AS f ON f.follower_user_id = rs.user_id AND f.followee_user_id = rs.recommended_user_id").
-			Where("rs.user_id = ? AND rs.slot_date = ? AND rs.status = 1 AND f.id IS NULL", input.UserID, dateOnly(input.CurrentDate)).
+			Where("rs.user_id = ? AND rs.slot_date = ? AND rs.status IN ?", input.UserID, dateOnly(input.CurrentDate), []int{1, 2}).
 			Order("rs.display_order ASC, rs.id ASC").
 			Limit(5)
 		query = query.

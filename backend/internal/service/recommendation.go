@@ -49,7 +49,7 @@ func (s *Service) GetRecommendations(userID int) (*RecommendationsResponse, erro
 			},
 			Status:      row.Status,
 			StatusLabel: recommendationStatusLabel(row.Status),
-			IsFollowing: false,
+			IsFollowing: row.Following,
 		})
 	}
 

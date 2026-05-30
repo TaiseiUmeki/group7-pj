@@ -102,7 +102,7 @@ export default function Home() {
         throw new Error(message || "おすすめユーザーを読み込めませんでした。");
       }
 
-      setRecommendedUsers(payload.items.filter((item) => !item.isFollowing).slice(0, 5).map(mapRecommendationItemToProfile));
+      setRecommendedUsers(payload.items.slice(0, 5).map(mapRecommendationItemToProfile));
     } catch (error) {
       setRecommendationsError(error instanceof Error ? error.message : "おすすめユーザーを読み込めませんでした。");
     } finally {
@@ -174,19 +174,22 @@ export default function Home() {
     setFollowingRecommendationIDs((ids) => Array.from(new Set([...ids, profile.userId as number])));
 
     try {
+      const following = Boolean(profile.isFollowing);
       const response = await fetch(`${apiUrl}/api/users/${profile.userId}/follow`, {
-        method: "POST",
+        method: following ? "DELETE" : "POST",
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
       const payload = (await response.json().catch(() => null)) as { following?: boolean; error?: string } | null;
-      if (!response.ok || !payload?.following) {
+      if (!response.ok || !payload || !("following" in payload)) {
         throw new Error(payload?.error || "フォローできませんでした。");
       }
 
       setRecommendationsError("");
-      setRecommendedUsers((users) => users.filter((user) => user.userId !== profile.userId));
+      setRecommendedUsers((users) => users.map((user) => (
+        user.userId === profile.userId ? { ...user, isFollowing: payload.following } : user
+      )));
       void loadTimeline("recommended");
     } catch (error) {
       setRecommendationsError(error instanceof Error ? error.message : "フォローできませんでした。");

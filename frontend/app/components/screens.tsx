@@ -119,7 +119,7 @@ export function TimelineScreen({
                         onClick={() => onFollowRecommendation(profile)}
                         type="button"
                       >
-                        {updating ? "更新中" : "フォロー"}
+                        {updating ? "更新中" : profile.isFollowing ? "フォロー解除" : "フォロー"}
                       </button>
                     </article>
                   );
