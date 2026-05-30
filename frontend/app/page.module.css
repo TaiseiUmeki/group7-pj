@@ -892,10 +892,21 @@
 }
 
 .log {
+  width: 100%;
   padding: 16px 18px;
   border: 1px solid #e6ebf2;
   border-radius: 14px;
   background: #fff;
+  text-align: left;
+}
+
+button.log {
+  cursor: pointer;
+}
+
+button.log:hover {
+  border-color: #bcd0f7;
+  box-shadow: 0 6px 18px rgba(49, 108, 240, 0.1);
 }
 
 .log time {

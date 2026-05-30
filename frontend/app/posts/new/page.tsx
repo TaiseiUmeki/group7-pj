@@ -1,16 +1,31 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AppShell } from "../../components/AppShell";
 import { CreateRecordScreen } from "../../components/screens";
 import { exerciseTypeIDs } from "../../constants/workout";
 import type { DetailedWorkoutInput, WorkoutRecordResponse } from "../../types/workout";
 
 export default function CreatePostPage() {
+  return (
+    <Suspense fallback={null}>
+      <CreatePostContent />
+    </Suspense>
+  );
+}
+
+function CreatePostContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [postingDetailedWorkout, setPostingDetailedWorkout] = useState(false);
   const [detailedWorkoutError, setDetailedWorkoutError] = useState("");
+  const startTimeParam = searchParams.get("startTime");
+  const durationMinutesParam = Number(searchParams.get("durationMinutes"));
+  const initialStartTime = startTimeParam ? toLocalDateTimeInputValue(startTimeParam) : undefined;
+  const initialDurationMinutes = Number.isFinite(durationMinutesParam) && durationMinutesParam > 0
+    ? durationMinutesParam
+    : undefined;
 
   const createDetailedWorkout = async (input: DetailedWorkoutInput) => {
     if (postingDetailedWorkout) {
@@ -70,7 +85,18 @@ export default function CreatePostPage() {
         posting={postingDetailedWorkout}
         onBack={() => router.push("/")}
         onSubmit={createDetailedWorkout}
+        initialStartTime={initialStartTime}
+        initialDurationMinutes={initialDurationMinutes}
       />
     </AppShell>
   );
+}
+
+function toLocalDateTimeInputValue(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 16);
 }

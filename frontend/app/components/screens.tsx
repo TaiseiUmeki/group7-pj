@@ -269,6 +269,7 @@ export function ProfileScreen({
   onSignout,
   onFollowToggle,
   onOpenConnection,
+  onOpenLog,
   followUpdating = false,
 }: {
   profile: Profile;
@@ -279,6 +280,7 @@ export function ProfileScreen({
   onSignout?: () => void;
   onFollowToggle?: () => void;
   onOpenConnection?: (connection: Connection) => void;
+  onOpenLog?: (postId: number) => void;
   followUpdating?: boolean;
 }) {
   const [panel, setPanel] = useState<"summary" | "edit" | "following" | "followers">("summary");
@@ -404,13 +406,30 @@ export function ProfileScreen({
         {recordErrorMessage ? <p className={styles.profileNotice}>{recordErrorMessage}</p> : null}
         <div className={styles.logs}>
           {profile.logs.length > 0 ? (
-            profile.logs.map((log) => (
-              <article className={styles.log} key={log.id}>
-                <time>{log.date}</time>
-                <strong>{log.exercise}</strong>
-                <p>{log.detail}</p>
-              </article>
-            ))
+            profile.logs.map((log) => {
+              const content = (
+                <>
+                  <time>{log.date}</time>
+                  <strong>{log.exercise}</strong>
+                  <p>{log.detail}</p>
+                </>
+              );
+
+              return log.postId && onOpenLog ? (
+                <button
+                  className={styles.log}
+                  key={log.id}
+                  onClick={() => onOpenLog(log.postId!)}
+                  type="button"
+                >
+                  {content}
+                </button>
+              ) : (
+                <article className={styles.log} key={log.id}>
+                  {content}
+                </article>
+              );
+            })
           ) : (
             <p className={styles.emptyState}>まだトレーニング記録がありません。</p>
           )}
@@ -618,7 +637,7 @@ export function QuickStartScreen({
         </button>
       </div>
       {errorMessage ? <p className={styles.workoutError} role="alert">{errorMessage}</p> : null}
-      <p className={styles.finishNote}>終了すると計測結果を投稿し、タイムラインへ戻ります。</p>
+      <p className={styles.finishNote}>終了すると計測結果を使って投稿内容を編集できます。</p>
     </section>
   );
 }
@@ -628,16 +647,20 @@ export function CreateRecordScreen({
   posting,
   onBack,
   onSubmit,
+  initialStartTime,
+  initialDurationMinutes,
 }: {
   errorMessage: string;
   posting: boolean;
   onBack: () => void;
   onSubmit: (input: DetailedWorkoutInput) => void;
+  initialStartTime?: string;
+  initialDurationMinutes?: number;
 }) {
   const [bodyPart, setBodyPart] = useState<BodyPart | "">("");
   const [exercise, setExercise] = useState("");
-  const [startTime, setStartTime] = useState(getLocalDateTimeInputValue);
-  const [durationMinutes, setDurationMinutes] = useState("45");
+  const [startTime, setStartTime] = useState(initialStartTime ?? getLocalDateTimeInputValue);
+  const [durationMinutes, setDurationMinutes] = useState(String(initialDurationMinutes ?? 45));
   const [note, setNote] = useState("");
 
   // 部位の選択に応じて、種目の選択肢を絞り込む。
