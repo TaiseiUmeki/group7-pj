@@ -201,6 +201,7 @@ export default function ProfilePage() {
             router.push(`/users/${connection.userId}`);
           }
         }}
+        onOpenLog={(postId) => router.push(`/posts/${postId}`)}
         recordErrorMessage={[workoutRecordsError, connectionsError].filter(Boolean).join(" / ")}
       />
     </AppShell>
