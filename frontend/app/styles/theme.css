@@ -1,0 +1,53 @@
+:root {
+  --bg: #f7f9fc;
+  --foreground: #182236;
+  --surface: #ffffff;
+  --surface-soft: #f3f7fc;
+  --surface-muted: #e8eef6;
+  --border: #e3e8f0;
+  --muted: #667488;
+  --primary: #316cf0;
+  --primary-weak: #e9f0ff;
+  --success: #25a354;
+  --danger: #bd352d;
+  --shadow: 0 6px 24px rgba(16,24,40,0.08);
+  --card-bg: var(--surface);
+  --card-border: #e5eaf1;
+  --card-edge-color: rgba(16,24,40,0.04);
+  --nav-bg: #fff;
+  color-scheme: light;
+}
+
+/* Dark / black theme overrides */
+html[data-theme="dark"] {
+  --bg: #000000;
+  --foreground: #ffffff;
+  --surface: #000000;
+  --surface-soft: #000000;
+  --surface-muted: #0b0b0b;
+  --border: rgba(255,255,255,0.06);
+  --muted: #9aa6b3;
+  --primary: #5f9bff;
+  --shadow: 0 8px 20px rgba(0,0,0,0.6);
+  --card-bg: #000000;
+  --card-border: #111111;
+  --card-edge-color: rgba(255,255,255,0.035);
+  --nav-bg: #000000;
+  color-scheme: dark;
+}
+
+/* convenience aliases used by legacy CSS */
+:root {
+  --background: var(--bg);
+  --foreground-color: var(--foreground);
+}
+
+/* hide decorative blobs in dark mode and force solid background */
+html[data-theme="dark"] body {
+  background: var(--bg) !important;
+}
+
+html[data-theme="dark"] body::before,
+html[data-theme="dark"] body::after {
+  display: none;
+}
