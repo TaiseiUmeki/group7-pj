@@ -5,7 +5,7 @@ import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import styles from "../page.module.css";
 import { availableTags, exercisesByBodyPart } from "../constants/workout";
-import type { BodyPart, Connection, DetailedWorkoutInput, Profile, ProfileTag, TimelinePost, TimelineTab, WorkoutSession } from "../types/workout";
+import type { BodyPart, Connection, DetailedWorkoutInput, Profile, ProfileTag, SupportTarget, TimelinePost, TimelineTab, WorkoutSession } from "../types/workout";
 import { formatStopwatch, getDaysWithoutPost, getLocalDateTimeInputValue, getWorkoutElapsed } from "../utils/workout";
 import { ArrowIcon, ChevronIcon, HeartIcon, PauseIcon, PlayIcon, PlusIcon, StopIcon, UserIcon } from "./icons";
 
@@ -34,6 +34,10 @@ export function TimelineScreen({
   followingRecommendationIDs,
   onFollowRecommendation,
   onCreateRecord,
+  supportTargets,
+  supportTargetsError,
+  onDismissSupportTarget,
+  onSupportTarget,
 }: {
   activeTab: TimelineTab;
   onSelectTab: (tab: TimelineTab) => void;
@@ -50,8 +54,13 @@ export function TimelineScreen({
   followingRecommendationIDs: number[];
   onFollowRecommendation: (profile: Profile) => void;
   onCreateRecord: () => void;
+  supportTargets: SupportTarget[];
+  supportTargetsError: string;
+  onDismissSupportTarget: (target: SupportTarget) => void;
+  onSupportTarget: (target: SupportTarget) => void;
 }) {
   const posts = timelinePosts;
+  const supportTarget = supportTargets[0];
   const todayLabel = new Intl.DateTimeFormat("ja-JP", {
     year: "numeric",
     month: "2-digit",
@@ -77,6 +86,42 @@ export function TimelineScreen({
         </button>
       </header>
       <section className={styles.timeline} aria-label="投稿一覧">
+        {supportTarget ? (
+          <section className={styles.supportPanel} aria-labelledby="support-title">
+            <div className={styles.supportHeader}>
+              <span className={`${styles.avatar} ${styles[toneForSupportTarget(supportTarget.user.id)]}`}>
+                <UserIcon />
+              </span>
+              <div>
+                <h2 id="support-title">応援できるフォロー先</h2>
+                <strong>{supportTarget.user.username}</strong>
+              </div>
+            </div>
+            <dl className={styles.supportStats}>
+              <div>
+                <dt>最後のトレーニング</dt>
+                <dd>{supportTarget.lastTrainedOn}</dd>
+              </div>
+              <div>
+                <dt>未実施日数</dt>
+                <dd>{supportTarget.daysWithoutTraining}日</dd>
+              </div>
+              <div>
+                <dt>設定頻度</dt>
+                <dd>{supportTarget.trainingFrequencyDays}日ごと</dd>
+              </div>
+            </dl>
+            {supportTargetsError ? <p className={styles.supportError}>{supportTargetsError}</p> : null}
+            <div className={styles.supportActions}>
+              <button type="button" onClick={() => onDismissSupportTarget(supportTarget)}>
+                あとで
+              </button>
+              <button type="button" onClick={() => onSupportTarget(supportTarget)}>
+                がんばれ
+              </button>
+            </div>
+          </section>
+        ) : null}
         {activeTab === "recommended" ? (
           <section className={styles.recommendationPanel} aria-label="おすすめユーザー">
             <div className={styles.recommendationHeader}>
@@ -186,6 +231,11 @@ export function TimelineScreen({
       </button>
     </>
   );
+}
+
+function toneForSupportTarget(userID: number): Profile["tone"] {
+  const tones: Profile["tone"][] = ["blue", "green", "purple"];
+  return tones[Math.abs(userID) % tones.length];
 }
 
 export function PostDetailScreen({

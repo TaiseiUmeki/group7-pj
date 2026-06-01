@@ -1,5 +1,5 @@
 import { availableTags } from "../constants/workout";
-import type { Profile, ProfileTag, TimelinePost } from "../types/workout";
+import type { NotificationItem, Profile, ProfileTag, TimelinePost } from "../types/workout";
 
 export type TimelineApiResponse = {
   items: TimelineApiItem[];
@@ -46,6 +46,25 @@ export type RecommendationsApiResponse = {
   items: RecommendationApiItem[];
 };
 
+export type SupportTargetsApiResponse = {
+  items: SupportTargetApiItem[];
+};
+
+export type NotificationsApiResponse = {
+  items: NotificationApiItem[];
+  nextCursor?: string | null;
+};
+
+export type SupportTargetApiItem = {
+  user: {
+    id: number;
+    username: string;
+  };
+  lastTrainedOn: string;
+  trainingFrequencyDays: number;
+  daysWithoutTraining: number;
+};
+
 export type RecommendationApiItem = {
   user: {
     id: number;
@@ -55,6 +74,17 @@ export type RecommendationApiItem = {
   status: number;
   statusLabel: string;
   isFollowing: boolean;
+};
+
+export type NotificationApiItem = {
+  id: number;
+  notificationType: number;
+  notificationTypeLabel: string;
+  body: string;
+  trainingPostId: number | null;
+  supportMessageId: number | null;
+  isRead: boolean;
+  createdAt: string;
 };
 
 const toneByUserID = (userID: number): Profile["tone"] => {
@@ -176,4 +206,15 @@ export const mapRecommendationItemToProfile = (item: RecommendationApiItem): Pro
   logs: [],
   tags: toProfileTags(item.user.tags),
   isFollowing: item.isFollowing,
+});
+
+export const mapNotificationItem = (item: NotificationApiItem): NotificationItem => ({
+  id: item.id,
+  notificationType: item.notificationType,
+  notificationTypeLabel: item.notificationTypeLabel,
+  body: item.body,
+  trainingPostId: item.trainingPostId,
+  supportMessageId: item.supportMessageId,
+  isRead: item.isRead,
+  createdAt: item.createdAt,
 });

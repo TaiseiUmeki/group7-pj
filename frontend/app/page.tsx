@@ -5,11 +5,12 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "./components/AppShell";
 import { TimelineScreen } from "./components/screens";
-import type { Profile, TimelinePost, TimelineTab } from "./types/workout";
+import type { Profile, SupportTarget, TimelinePost, TimelineTab } from "./types/workout";
 import {
   mapRecommendationItemToProfile,
   mapTimelineItemToPost,
   type RecommendationsApiResponse,
+  type SupportTargetsApiResponse,
   type TimelineApiResponse,
 } from "./utils/apiMappers";
 
@@ -33,6 +34,9 @@ export default function Home() {
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   const [recommendationsError, setRecommendationsError] = useState("");
   const [followingRecommendationIDs, setFollowingRecommendationIDs] = useState<number[]>([]);
+  const [supportTargets, setSupportTargets] = useState<SupportTarget[]>([]);
+  const [dismissedSupportTargetIDs, setDismissedSupportTargetIDs] = useState<number[]>([]);
+  const [supportTargetsError, setSupportTargetsError] = useState("");
 
   const loadTimeline = useCallback(async (source: TimelineTab) => {
     const token = window.localStorage.getItem("group7pj_token");
@@ -110,12 +114,42 @@ export default function Home() {
     }
   }, [apiUrl]);
 
+  const loadSupportTargets = useCallback(async () => {
+    const token = window.localStorage.getItem("group7pj_token");
+
+    if (!token) {
+      setSupportTargets([]);
+      setSupportTargetsError("");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/api/support-targets`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const payload = (await response.json().catch(() => null)) as SupportTargetsApiResponse | { error?: string } | null;
+      if (!response.ok || !payload || !("items" in payload)) {
+        const message = payload && "error" in payload ? payload.error : undefined;
+        throw new Error(message || "応援対象を読み込めませんでした。");
+      }
+
+      setSupportTargets(payload.items);
+      setSupportTargetsError("");
+    } catch (error) {
+      setSupportTargets([]);
+      setSupportTargetsError(error instanceof Error ? error.message : "応援対象を読み込めませんでした。");
+    }
+  }, [apiUrl]);
+
   useEffect(() => {
     void loadTimeline(activeTab);
+    void loadSupportTargets();
     if (activeTab === "recommended") {
       void loadRecommendations();
     }
-  }, [activeTab, loadRecommendations, loadTimeline]);
+  }, [activeTab, loadRecommendations, loadSupportTargets, loadTimeline]);
 
   const openMemberProfile = (profile: Profile) => {
     if (profile.userId) {
@@ -198,6 +232,38 @@ export default function Home() {
     }
   };
 
+  const dismissSupportTarget = (target: SupportTarget) => {
+    setDismissedSupportTargetIDs((ids) => Array.from(new Set([...ids, target.user.id])));
+  };
+
+  const supportTarget = async (target: SupportTarget) => {
+    const token = window.localStorage.getItem("group7pj_token");
+    if (!token) {
+      setSupportTargetsError("ログイン情報を確認できません。もう一度ログインしてください。");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/api/supports`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ receiverUserId: target.user.id }),
+      });
+      const payload = (await response.json().catch(() => null)) as { id?: number; error?: string } | null;
+      if (!response.ok || !payload || !("id" in payload)) {
+        throw new Error(payload?.error || "応援を送信できませんでした。");
+      }
+
+      setSupportTargetsError("");
+      dismissSupportTarget(target);
+    } catch (error) {
+      setSupportTargetsError(error instanceof Error ? error.message : "応援を送信できませんでした。");
+    }
+  };
+
   return (
     <AppShell activeView="timeline">
       <TimelineScreen
@@ -216,6 +282,10 @@ export default function Home() {
         followingRecommendationIDs={followingRecommendationIDs}
         onFollowRecommendation={followRecommendation}
         onCreateRecord={() => router.push("/posts/new")}
+        supportTargets={supportTargets.filter((target) => !dismissedSupportTargetIDs.includes(target.user.id))}
+        supportTargetsError={supportTargetsError}
+        onDismissSupportTarget={dismissSupportTarget}
+        onSupportTarget={supportTarget}
       />
     </AppShell>
   );

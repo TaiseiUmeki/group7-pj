@@ -1,7 +1,7 @@
 import type { availableTags } from "../constants/workout";
 
 export type TimelineTab = "recommended" | "following";
-export type View = "timeline" | "postDetail" | "quickStart" | "createRecord" | "profile" | "member";
+export type View = "timeline" | "postDetail" | "quickStart" | "createRecord" | "profile" | "member" | "notifications";
 export type Tone = "blue" | "green" | "purple";
 export type BodyPart = "胸" | "背中" | "脚" | "肩" | "腕" | "体幹";
 
@@ -60,6 +60,27 @@ export type TimelinePost = {
   trainedAt: string;
   postedAt: string;
   likes: number;
+};
+
+export type SupportTarget = {
+  user: {
+    id: number;
+    username: string;
+  };
+  lastTrainedOn: string;
+  trainingFrequencyDays: number;
+  daysWithoutTraining: number;
+};
+
+export type NotificationItem = {
+  id: number;
+  notificationType: number;
+  notificationTypeLabel: string;
+  body: string;
+  trainingPostId: number | null;
+  supportMessageId: number | null;
+  isRead: boolean;
+  createdAt: string;
 };
 
 export type WorkoutSession = {
