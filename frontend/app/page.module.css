@@ -470,6 +470,41 @@
   box-shadow: 0 3px 12px rgba(49, 108, 240, 0.09);
 }
 
+.supportPanelHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.supportPanelHeader h2 {
+  margin: 0;
+  color: #172235;
+  font-size: 18px;
+}
+
+.supportPanelHeader span {
+  color: #68768a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.supportList {
+  display: grid;
+  gap: 12px;
+}
+
+.supportItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(210px, 0.9fr) minmax(190px, 0.8fr);
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid #dbe6fb;
+  border-radius: 8px;
+  background: #fff;
+}
+
 .supportHeader {
   display: grid;
   grid-template-columns: 54px 1fr;
@@ -493,9 +528,16 @@
   font-size: 14px;
 }
 
+.supportHeader div > span {
+  display: block;
+  margin-top: 4px;
+  color: #718096;
+  font-size: 12px;
+}
+
 .supportStats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
   margin: 0;
 }
@@ -504,7 +546,7 @@
   padding: 12px 14px;
   border: 1px solid #dbe6fb;
   border-radius: 8px;
-  background: #fff;
+  background: #f9fbff;
 }
 
 .supportStats dt {
@@ -530,7 +572,7 @@
 
 .supportActions {
   display: grid;
-  grid-template-columns: minmax(0, 120px) minmax(0, 1fr);
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
 
@@ -1552,6 +1594,10 @@ button.log:hover {
 
   .supportPanel {
     padding: 18px;
+  }
+
+  .supportItem {
+    grid-template-columns: 1fr;
   }
 
   .supportStats {

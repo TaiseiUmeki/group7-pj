@@ -51,6 +51,18 @@ var users = []userSeed{
 		},
 	},
 	{
+		Username:              "Tarou Sabo",
+		Email:                 "sabori@example.com",
+		Bio:                   "応援通知の動作確認用ユーザーです。",
+		TagIDs:                []int{1, 8},
+		TrainingFrequencyDays: 2,
+		Followed:              true,
+		Recommended:           false,
+		Posts: []postSeed{
+			{DaysAgo: 5, Hour: 9, ExerciseType: 6, DurationMinutes: 25, Note: "応援通知テスト用の古いトレーニング記録。"},
+		},
+	},
+	{
 		Username:              "Bob Suzuki",
 		Email:                 "bob@example.com",
 		Bio:                   "大会に向けてBIG3を伸ばしています。",
