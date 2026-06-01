@@ -1830,7 +1830,8 @@ html[data-theme="dark"] .detailCard,
 html[data-theme="dark"] .recommendationItem ,
 html[data-theme="dark"] .badgeCard,
 html[data-theme="dark"] .stats,
-html[data-theme="dark"] .inactiveStatus{
+html[data-theme="dark"] .inactiveStatus,
+html[data-theme="dark"] .emptyState{
   background: #222222;
   color: #fff;
   border-color: rgba(255,255,255,0.03);
@@ -1847,7 +1848,11 @@ html[data-theme="dark"] .supportPanel div {
   background: rgb(41, 41, 41);
   color: #fff;
 }
-
+html[data-theme="dark"] .signoutButton {
+    background: #222222;
+    color: var(--danger);
+    border-color: rgba(255, 255, 255, 0.18);
+  }
 
 /* ThemeToggle: rgba(117, 126, 255, 0.03)ow sun in dark using CSS only to avoid SSR mismatch */
 .themeToggleButton .sunRays,
@@ -2092,13 +2097,13 @@ html[data-theme="dark"] .themeToggleButton .moon {
   .detailLikeButton,
   .notificationToolbar,
   .log,
-  .signoutButton,
   .nav,
   .help {
     background: var(--surface-soft);
     color: var(--foreground);
     border-color: var(--border);
   }
+ 
 
   .formField input:focus,
   .formField select:focus,
