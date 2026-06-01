@@ -1831,7 +1831,9 @@ html[data-theme="dark"] .recommendationItem ,
 html[data-theme="dark"] .badgeCard,
 html[data-theme="dark"] .stats,
 html[data-theme="dark"] .inactiveStatus,
-html[data-theme="dark"] .emptyState{
+html[data-theme="dark"] .emptyState,
+html[data-theme="dark"] .profileHeader,
+html[data-theme="dark"] .tabs{
   background: #222222;
   color: #fff;
   border-color: rgba(255,255,255,0.03);
@@ -1985,15 +1987,13 @@ html[data-theme="dark"] .themeToggleButton .moon {
   .edit,
   .back svg,
   .supportActions button:first-child,
-  .nav > button.activeNav {
+  .workoutOverview strong,
+  .detailButton {
     color: var(--foreground);
   }
 
   .tabs .activeTab::after,
   .formIntro p,
-  .edit,
-  .detailButton,
-  .nav > button.activeNav,
   .notificationToolbar .selectedNotificationFilter,
   .notificationType,
   .profileTags span,
@@ -2005,6 +2005,10 @@ html[data-theme="dark"] .themeToggleButton .moon {
   .quickButton {
     color: #fff;
   }
+  .nav > button.activeNav
+    {
+      color: var(--primary);
+    }
 
   .tabs,
   .recommendationPanel,
