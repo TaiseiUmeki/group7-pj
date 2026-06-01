@@ -86,7 +86,49 @@ export function TimelineScreen({
         </button>
       </header>
       <section className={styles.timeline} aria-label="投稿一覧">
-        {supportTarget ? (
+        {supportTargets.length > 0 ? (
+          <section className={styles.supportPanel} aria-labelledby="support-title">
+            <div className={styles.supportPanelHeader}>
+              <h2 id="support-title">応援できるフォロー先</h2>
+              <span>{supportTargets.length}人</span>
+            </div>
+            {supportTargetsError ? <p className={styles.supportError}>{supportTargetsError}</p> : null}
+            <div className={styles.supportList}>
+              {supportTargets.map((target) => (
+                <article className={styles.supportItem} key={target.user.id}>
+                  <div className={styles.supportHeader}>
+                    <span className={`${styles.avatar} ${styles[toneForSupportTarget(target.user.id)]}`}>
+                      <UserIcon />
+                    </span>
+                    <div>
+                      <strong>{target.user.username}</strong>
+                      <span>最終トレーニング {target.lastTrainedOn}</span>
+                    </div>
+                  </div>
+                  <dl className={styles.supportStats}>
+                    <div>
+                      <dt>未実施</dt>
+                      <dd>{target.daysWithoutTraining}日</dd>
+                    </div>
+                    <div>
+                      <dt>設定頻度</dt>
+                      <dd>{target.trainingFrequencyDays}日ごと</dd>
+                    </div>
+                  </dl>
+                  <div className={styles.supportActions}>
+                    <button type="button" onClick={() => onDismissSupportTarget(target)}>
+                      あとで
+                    </button>
+                    <button type="button" onClick={() => onSupportTarget(target)}>
+                      がんばれ
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
+        {false ? (
           <section className={styles.supportPanel} aria-labelledby="support-title">
             <div className={styles.supportHeader}>
               <span className={`${styles.avatar} ${styles[toneForSupportTarget(supportTarget.user.id)]}`}>
