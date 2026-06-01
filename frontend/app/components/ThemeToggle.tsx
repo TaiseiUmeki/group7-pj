@@ -4,28 +4,32 @@ import { useEffect, useState } from "react";
 import styles from "../page.module.css";
 
 export default function ThemeToggle() {
-  const [theme, setTheme] = useState<"light" | "dark">(() => {
-    if (typeof window === "undefined") return "light";
-    // prefer cookie for SSR consistency
-    const cookieMatch = document.cookie.match(/(?:^|; )theme=(light|dark)(?:;|$)/);
-    if (cookieMatch && (cookieMatch[1] === "light" || cookieMatch[1] === "dark")) return cookieMatch[1] as "light" | "dark";
-    const stored = localStorage.getItem("theme");
-    if (stored === "light" || stored === "dark") return stored as "light" | "dark";
-    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  });
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    try {
-      document.documentElement.setAttribute("data-theme", theme);
-      localStorage.setItem("theme", theme);
-      // also persist in a cookie so the server can read it on SSR
-      document.cookie = `theme=${theme}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
-    } catch {
-      // ignore
-    }
-  }, [theme]);
+    const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
 
-  const toggle = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
+    if (savedTheme) {
+      setTheme(savedTheme);
+      document.documentElement.setAttribute("data-theme", savedTheme);
+    }
+
+    setMounted(true);
+  }, []);
+
+  const toggle = () => {
+    const nextTheme = theme === "light" ? "dark" : "light";
+
+    setTheme(nextTheme);
+    localStorage.setItem("theme", nextTheme);
+    document.documentElement.setAttribute("data-theme", nextTheme);
+  };
+
+  if (!mounted) {
+    return null;
+  }
+
 
   return (
     <button
