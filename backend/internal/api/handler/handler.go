@@ -179,8 +179,9 @@ func (h *Handler) Signup(c *gin.Context) {
 		return
 	}
 
-	user.PasswordHash = ""
-	c.JSON(http.StatusCreated, user)
+	responseUser := *user
+	responseUser.PasswordHash = ""
+	c.JSON(http.StatusCreated, responseUser)
 }
 
 // Me はJWTの内容から現在のユーザーを返します

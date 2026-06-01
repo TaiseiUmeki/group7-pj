@@ -19,6 +19,7 @@ var ErrWorkoutRecordNotFound = errors.New("workout record not found")
 var ErrProfileNotFound = errors.New("profile not found")
 
 var ErrTrainingPostNotFound = errors.New("training post not found")
+var ErrNotificationNotFound = errors.New("notification not found")
 
 // Repository はデータベースアクセス層のインターフェースです
 type Repository interface {
@@ -59,6 +60,10 @@ type Repository interface {
 	ListFollowingProfiles(userID int) ([]FollowConnectionRow, error)
 	ListFollowerProfiles(userID int) ([]FollowConnectionRow, error)
 	ListDailyRecommendationProfiles(input RecommendationQuery) ([]RecommendationRow, error)
+	ListSupportTargetRows(userID int, currentDate time.Time) ([]SupportTargetRow, error)
+	CreateSupportWithNotification(support *model.SupportMessage, notification *model.Notification) error
+	ListNotificationRows(input NotificationQuery) ([]NotificationRow, error)
+	MarkNotificationRead(userID int, notificationID int, readAt time.Time) (*model.Notification, error)
 }
 
 type TimelineQuery struct {
@@ -119,6 +124,31 @@ type RecommendationRow struct {
 	Status       int
 	DisplayOrder int
 	Following    bool
+}
+
+type SupportTargetRow struct {
+	UserID                int
+	Username              string
+	LastTrainedOn         time.Time
+	TrainingFrequencyDays int
+}
+
+type NotificationQuery struct {
+	UserID     int
+	Limit      int
+	CursorTime *time.Time
+	CursorID   *int
+	UnreadOnly bool
+}
+
+type NotificationRow struct {
+	ID               int
+	NotificationType int
+	Body             string
+	TrainingPostID   *int
+	SupportMessageID *int
+	IsRead           bool
+	CreatedAt        time.Time
 }
 
 // MySQLRepository はMySQL用のRepository実装です
@@ -571,6 +601,95 @@ func (r *MySQLRepository) ListDailyRecommendationProfiles(input RecommendationQu
 		Limit(limit).
 		Find(&rows).Error
 	return rows, err
+}
+
+func (r *MySQLRepository) ListSupportTargetRows(userID int, currentDate time.Time) ([]SupportTargetRow, error) {
+	var rows []SupportTargetRow
+	err := r.db.Table("follows AS f").
+		Select(`
+			p.user_id,
+			p.username,
+			p.training_frequency_days,
+			latest.last_trained_on
+		`).
+		Joins("JOIN profiles AS p ON p.user_id = f.followee_user_id AND p.deleted_at IS NULL").
+		Joins("JOIN users AS u ON u.id = p.user_id AND u.deleted_at IS NULL").
+		Joins(`
+			JOIN (
+				SELECT user_id, MAX(trained_on) AS last_trained_on
+				FROM training_posts
+				WHERE deleted_at IS NULL AND did_train = TRUE
+				GROUP BY user_id
+			) AS latest ON latest.user_id = f.followee_user_id
+		`).
+		Where("f.follower_user_id = ?", userID).
+		Where("DATEDIFF(?, latest.last_trained_on) > p.training_frequency_days", dateOnly(currentDate)).
+		Order("latest.last_trained_on ASC, p.user_id ASC").
+		Find(&rows).Error
+	return rows, err
+}
+
+func (r *MySQLRepository) CreateSupportWithNotification(support *model.SupportMessage, notification *model.Notification) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := ensureUserExists(tx, support.ReceiverUserID); err != nil {
+			return err
+		}
+		if err := tx.Create(support).Error; err != nil {
+			return err
+		}
+		notification.SupportMessageID = &support.ID
+		if err := tx.Create(notification).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+func (r *MySQLRepository) ListNotificationRows(input NotificationQuery) ([]NotificationRow, error) {
+	query := r.db.Table("notifications AS n").
+		Select(`
+			n.id,
+			n.notification_type,
+			n.body,
+			n.training_post_id,
+			n.support_message_id,
+			n.is_read,
+			n.created_at
+		`).
+		Where("n.user_id = ?", input.UserID)
+
+	if input.UnreadOnly {
+		query = query.Where("n.is_read = FALSE")
+	}
+	if input.CursorTime != nil && input.CursorID != nil {
+		query = query.Where("(n.created_at < ? OR (n.created_at = ? AND n.id < ?))", input.CursorTime, input.CursorTime, *input.CursorID)
+	}
+
+	var rows []NotificationRow
+	err := query.
+		Order("n.created_at DESC, n.id DESC").
+		Limit(input.Limit).
+		Find(&rows).Error
+	return rows, err
+}
+
+func (r *MySQLRepository) MarkNotificationRead(userID int, notificationID int, readAt time.Time) (*model.Notification, error) {
+	var notification model.Notification
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("id = ? AND user_id = ?", notificationID, userID).First(&notification).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrNotificationNotFound
+			}
+			return err
+		}
+		notification.IsRead = true
+		notification.ReadAt = &readAt
+		return tx.Save(&notification).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &notification, nil
 }
 
 func ensureUserExists(db *gorm.DB, userID int) error {
