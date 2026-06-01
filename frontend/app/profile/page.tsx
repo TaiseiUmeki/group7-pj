@@ -2,19 +2,44 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AppShell } from "../components/AppShell";
 import { ProfileScreen } from "../components/screens";
 import { availableTags } from "../constants/workout";
 import { myProfile } from "../constants/mockData";
-import type { Profile, WorkoutRecord } from "../types/workout";
+import type { Connection, Profile, WorkoutRecord } from "../types/workout";
 import { formatWorkoutLog, getLatestPostedAt } from "../utils/workout";
 
+type ConnectionsResponse = {
+  items: Array<{
+    userId: number;
+    username: string;
+    handle: string;
+    relation: string;
+  }>;
+};
+
+const toneByUserID = (userID: number): Connection["tone"] => {
+  const tones: Connection["tone"][] = ["blue", "green", "purple"];
+  return tones[Math.abs(userID) % tones.length];
+};
+
+const mapConnection = (item: ConnectionsResponse["items"][number]): Connection => ({
+  userId: item.userId,
+  name: item.username,
+  handle: item.handle,
+  tone: toneByUserID(item.userId),
+  relation: item.relation,
+});
+
 export default function ProfilePage() {
+  const router = useRouter();
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
   const [currentProfile, setCurrentProfile] = useState<Profile>(myProfile);
   const [workoutRecords, setWorkoutRecords] = useState<WorkoutRecord[]>([]);
   const [loadingWorkoutRecords, setLoadingWorkoutRecords] = useState(false);
   const [workoutRecordsError, setWorkoutRecordsError] = useState("");
+  const [connectionsError, setConnectionsError] = useState("");
 
   useEffect(() => {
     const token = window.localStorage.getItem("group7pj_token");
@@ -102,6 +127,55 @@ export default function ProfilePage() {
     void loadWorkoutRecords();
   }, [loadWorkoutRecords]);
 
+  const loadConnections = useCallback(async () => {
+    const token = window.localStorage.getItem("group7pj_token");
+
+    if (!token) {
+      setConnectionsError("");
+      return;
+    }
+
+    setConnectionsError("");
+
+    try {
+      const [followingResponse, followersResponse] = await Promise.all([
+        fetch(`${apiUrl}/api/me/following`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+        fetch(`${apiUrl}/api/me/followers`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+      ]);
+
+      const followingPayload = (await followingResponse.json().catch(() => null)) as ConnectionsResponse | { error?: string } | null;
+      const followersPayload = (await followersResponse.json().catch(() => null)) as ConnectionsResponse | { error?: string } | null;
+      if (!followingResponse.ok || !followingPayload || !("items" in followingPayload)) {
+        const message = followingPayload && "error" in followingPayload ? followingPayload.error : undefined;
+        throw new Error(message || "フォロー中ユーザーを読み込めませんでした。");
+      }
+      if (!followersResponse.ok || !followersPayload || !("items" in followersPayload)) {
+        const message = followersPayload && "error" in followersPayload ? followersPayload.error : undefined;
+        throw new Error(message || "フォロワーを読み込めませんでした。");
+      }
+
+      setCurrentProfile((profile) => ({
+        ...profile,
+        following: followingPayload.items.map(mapConnection),
+        followers: followersPayload.items.map(mapConnection),
+      }));
+    } catch (error) {
+      setConnectionsError(error instanceof Error ? error.message : "フォロー情報を読み込めませんでした。");
+    }
+  }, [apiUrl]);
+
+  useEffect(() => {
+    void loadConnections();
+  }, [loadConnections]);
+
   const ownProfile: Profile = {
     ...currentProfile,
     records: loadingWorkoutRecords ? "..." : String(workoutRecords.length),
@@ -122,7 +196,13 @@ export default function ProfilePage() {
         own
         onUpdate={setCurrentProfile}
         onSignout={handleSignout}
-        recordErrorMessage={workoutRecordsError}
+        onOpenConnection={(connection) => {
+          if (connection.userId) {
+            router.push(`/users/${connection.userId}`);
+          }
+        }}
+        onOpenLog={(postId) => router.push(`/posts/${postId}`)}
+        recordErrorMessage={[workoutRecordsError, connectionsError].filter(Boolean).join(" / ")}
       />
     </AppShell>
   );

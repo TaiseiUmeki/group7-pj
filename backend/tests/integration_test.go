@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -44,8 +45,14 @@ type fakeRepo struct {
 	nextProfileID int
 	recordsByID   map[int]*model.WorkoutRecord
 	postsByID     map[int]*model.TrainingPost
+	supportsByID  map[int]*model.SupportMessage
+	notifications map[int]*model.Notification
+	likes         map[int]map[int]bool
+	follows       map[int]map[int]bool
 	nextRecordID  int
 	nextPostID    int
+	nextSupportID int
+	nextNotifyID  int
 }
 
 func newFakeRepo(seedUser *model.User) *fakeRepo {
@@ -65,8 +72,14 @@ func newFakeRepo(seedUser *model.User) *fakeRepo {
 		nextProfileID: 1,
 		recordsByID:   map[int]*model.WorkoutRecord{},
 		postsByID:     map[int]*model.TrainingPost{},
+		supportsByID:  map[int]*model.SupportMessage{},
+		notifications: map[int]*model.Notification{},
+		likes:         map[int]map[int]bool{},
+		follows:       map[int]map[int]bool{},
 		nextRecordID:  1,
 		nextPostID:    1,
+		nextSupportID: 1,
+		nextNotifyID:  1,
 	}
 }
 
@@ -170,6 +183,10 @@ func (f *fakeRepo) GetWorkoutRecordsByUserID(userID int) ([]*model.WorkoutRecord
 	return records, nil
 }
 
+func (f *fakeRepo) GetVisibleWorkoutRecordsByUserID(userID int, viewerUserID int, currentDate time.Time) ([]*model.WorkoutRecord, error) {
+	return f.GetWorkoutRecordsByUserID(userID)
+}
+
 func (f *fakeRepo) GetLatestWorkoutRecordByUserID(userID int) (*model.WorkoutRecord, error) {
 	var latest *model.WorkoutRecord
 	for _, record := range f.recordsByID {
@@ -243,6 +260,7 @@ func (f *fakeRepo) ListTimelinePosts(input repository.TimelineQuery) ([]reposito
 		if err != nil {
 			return nil, err
 		}
+		likeCount, likedByMe := f.postLikeStatus(post.ID, input.UserID)
 		rows = append(rows, repository.TimelinePostRow{
 			ID:                    post.ID,
 			Source:                input.Source,
@@ -261,8 +279,8 @@ func (f *fakeRepo) ListTimelinePosts(input repository.TimelineQuery) ([]reposito
 			AuthorUsername:        profile.Username,
 			AuthorBio:             profile.Bio,
 			TrainingFrequencyDays: profile.TrainingFrequencyDays,
-			LikeCount:             0,
-			LikedByMe:             false,
+			LikeCount:             likeCount,
+			LikedByMe:             likedByMe,
 		})
 	}
 	return rows, nil
@@ -277,6 +295,7 @@ func (f *fakeRepo) GetTimelinePostByID(postID int, currentUserID int) (*reposito
 	if err != nil {
 		return nil, err
 	}
+	likeCount, likedByMe := f.postLikeStatus(post.ID, currentUserID)
 	return &repository.TimelinePostRow{
 		ID:                    post.ID,
 		UserID:                post.UserID,
@@ -294,9 +313,263 @@ func (f *fakeRepo) GetTimelinePostByID(postID int, currentUserID int) (*reposito
 		AuthorUsername:        profile.Username,
 		AuthorBio:             profile.Bio,
 		TrainingFrequencyDays: profile.TrainingFrequencyDays,
-		LikeCount:             0,
-		LikedByMe:             false,
+		LikeCount:             likeCount,
+		LikedByMe:             likedByMe,
 	}, nil
+}
+
+func (f *fakeRepo) CreatePostLike(postID int, userID int) error {
+	post, ok := f.postsByID[postID]
+	if !ok || post.DeletedAt != nil {
+		return repository.ErrTrainingPostNotFound
+	}
+	if f.likes[postID] == nil {
+		f.likes[postID] = map[int]bool{}
+	}
+	f.likes[postID][userID] = true
+	return nil
+}
+
+func (f *fakeRepo) DeletePostLike(postID int, userID int) error {
+	post, ok := f.postsByID[postID]
+	if !ok || post.DeletedAt != nil {
+		return repository.ErrTrainingPostNotFound
+	}
+	delete(f.likes[postID], userID)
+	return nil
+}
+
+func (f *fakeRepo) GetPostLikeStatus(postID int, userID int) (repository.PostLikeStatus, error) {
+	post, ok := f.postsByID[postID]
+	if !ok || post.DeletedAt != nil {
+		return repository.PostLikeStatus{}, repository.ErrTrainingPostNotFound
+	}
+	likeCount, likedByMe := f.postLikeStatus(postID, userID)
+	return repository.PostLikeStatus{
+		LikeCount: likeCount,
+		LikedByMe: likedByMe,
+	}, nil
+}
+
+func (f *fakeRepo) postLikeStatus(postID int, userID int) (int, bool) {
+	users := f.likes[postID]
+	return len(users), users[userID]
+}
+
+func (f *fakeRepo) CreateFollow(followerUserID int, followeeUserID int) error {
+	if _, ok := f.usersByID[followeeUserID]; !ok {
+		return repository.ErrUserNotFound
+	}
+	if f.follows[followerUserID] == nil {
+		f.follows[followerUserID] = map[int]bool{}
+	}
+	f.follows[followerUserID][followeeUserID] = true
+	return nil
+}
+
+func (f *fakeRepo) DeleteFollow(followerUserID int, followeeUserID int) error {
+	if _, ok := f.usersByID[followeeUserID]; !ok {
+		return repository.ErrUserNotFound
+	}
+	delete(f.follows[followerUserID], followeeUserID)
+	return nil
+}
+
+func (f *fakeRepo) GetFollowStatus(followerUserID int, followeeUserID int) (repository.FollowStatus, error) {
+	if _, ok := f.usersByID[followeeUserID]; !ok {
+		return repository.FollowStatus{}, repository.ErrUserNotFound
+	}
+	return repository.FollowStatus{Following: f.follows[followerUserID][followeeUserID]}, nil
+}
+
+func (f *fakeRepo) ListFollowingProfiles(userID int) ([]repository.FollowConnectionRow, error) {
+	rows := make([]repository.FollowConnectionRow, 0, len(f.follows[userID]))
+	for followeeUserID := range f.follows[userID] {
+		profile, err := f.GetProfileByUserID(followeeUserID)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, repository.FollowConnectionRow{
+			UserID:   profile.UserID,
+			Username: profile.Username,
+		})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		return rows[i].UserID < rows[j].UserID
+	})
+	return rows, nil
+}
+
+func (f *fakeRepo) ListFollowerProfiles(userID int) ([]repository.FollowConnectionRow, error) {
+	rows := []repository.FollowConnectionRow{}
+	for followerUserID, followees := range f.follows {
+		if !followees[userID] {
+			continue
+		}
+		profile, err := f.GetProfileByUserID(followerUserID)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, repository.FollowConnectionRow{
+			UserID:   profile.UserID,
+			Username: profile.Username,
+		})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		return rows[i].UserID < rows[j].UserID
+	})
+	return rows, nil
+}
+
+func (f *fakeRepo) ListDailyRecommendationProfiles(input repository.RecommendationQuery) ([]repository.RecommendationRow, error) {
+	rows := []repository.RecommendationRow{}
+	for _, profile := range f.profilesByID {
+		if profile.UserID == input.UserID {
+			continue
+		}
+		following := f.follows[input.UserID][profile.UserID]
+		status := 1
+		if following {
+			status = 2
+		}
+		rows = append(rows, repository.RecommendationRow{
+			ProfileID:    profile.ID,
+			UserID:       profile.UserID,
+			Username:     profile.Username,
+			Status:       status,
+			DisplayOrder: len(rows) + 1,
+			Following:    following,
+		})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		return rows[i].UserID < rows[j].UserID
+	})
+	for i := range rows {
+		rows[i].DisplayOrder = i + 1
+	}
+	if input.Limit > 0 && len(rows) > input.Limit {
+		rows = rows[:input.Limit]
+	}
+	return rows, nil
+}
+
+func (f *fakeRepo) ListSupportTargetRows(userID int, currentDate time.Time) ([]repository.SupportTargetRow, error) {
+	currentDate = testDateOnly(currentDate)
+	rows := []repository.SupportTargetRow{}
+	for followeeUserID := range f.follows[userID] {
+		profile, err := f.GetProfileByUserID(followeeUserID)
+		if err != nil {
+			return nil, err
+		}
+
+		var lastTrainedOn *time.Time
+		for _, post := range f.postsByID {
+			if post.UserID != followeeUserID || post.DeletedAt != nil || !post.DidTrain {
+				continue
+			}
+			trainedOn := testDateOnly(post.TrainedOn)
+			if lastTrainedOn == nil || trainedOn.After(*lastTrainedOn) {
+				value := trainedOn
+				lastTrainedOn = &value
+			}
+		}
+		if lastTrainedOn == nil {
+			continue
+		}
+		daysWithoutTraining := int(currentDate.Sub(*lastTrainedOn).Hours() / 24)
+		if daysWithoutTraining <= profile.TrainingFrequencyDays {
+			continue
+		}
+		rows = append(rows, repository.SupportTargetRow{
+			UserID:                profile.UserID,
+			Username:              profile.Username,
+			LastTrainedOn:         *lastTrainedOn,
+			TrainingFrequencyDays: profile.TrainingFrequencyDays,
+		})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].LastTrainedOn.Equal(rows[j].LastTrainedOn) {
+			return rows[i].UserID < rows[j].UserID
+		}
+		return rows[i].LastTrainedOn.Before(rows[j].LastTrainedOn)
+	})
+	return rows, nil
+}
+
+func (f *fakeRepo) CreateSupportWithNotification(support *model.SupportMessage, notification *model.Notification) error {
+	if _, ok := f.usersByID[support.ReceiverUserID]; !ok {
+		return repository.ErrUserNotFound
+	}
+	if support.ID == 0 {
+		support.ID = f.nextSupportID
+		f.nextSupportID++
+	}
+	if support.CreatedAt.IsZero() {
+		support.CreatedAt = time.Now()
+	}
+	f.supportsByID[support.ID] = support
+
+	if notification.ID == 0 {
+		notification.ID = f.nextNotifyID
+		f.nextNotifyID++
+	}
+	if notification.CreatedAt.IsZero() {
+		notification.CreatedAt = support.CreatedAt
+	}
+	notification.SupportMessageID = &support.ID
+	f.notifications[notification.ID] = notification
+	return nil
+}
+
+func (f *fakeRepo) ListNotificationRows(input repository.NotificationQuery) ([]repository.NotificationRow, error) {
+	rows := []repository.NotificationRow{}
+	for _, notification := range f.notifications {
+		if notification.UserID != input.UserID {
+			continue
+		}
+		if input.UnreadOnly && notification.IsRead {
+			continue
+		}
+		if input.CursorTime != nil && input.CursorID != nil {
+			if notification.CreatedAt.After(*input.CursorTime) || (notification.CreatedAt.Equal(*input.CursorTime) && notification.ID >= *input.CursorID) {
+				continue
+			}
+		}
+		rows = append(rows, repository.NotificationRow{
+			ID:               notification.ID,
+			NotificationType: notification.NotificationType,
+			Body:             notification.Body,
+			TrainingPostID:   notification.TrainingPostID,
+			SupportMessageID: notification.SupportMessageID,
+			IsRead:           notification.IsRead,
+			CreatedAt:        notification.CreatedAt,
+		})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].CreatedAt.Equal(rows[j].CreatedAt) {
+			return rows[i].ID > rows[j].ID
+		}
+		return rows[i].CreatedAt.After(rows[j].CreatedAt)
+	})
+	if input.Limit > 0 && len(rows) > input.Limit {
+		rows = rows[:input.Limit]
+	}
+	return rows, nil
+}
+
+func (f *fakeRepo) MarkNotificationRead(userID int, notificationID int, readAt time.Time) (*model.Notification, error) {
+	notification, ok := f.notifications[notificationID]
+	if !ok || notification.UserID != userID {
+		return nil, repository.ErrNotificationNotFound
+	}
+	notification.IsRead = true
+	notification.ReadAt = &readAt
+	return notification, nil
+}
+
+func testDateOnly(value time.Time) time.Time {
+	year, month, day := value.Date()
+	return time.Date(year, month, day, 0, 0, 0, 0, value.Location())
 }
 
 func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
@@ -358,8 +631,18 @@ func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 	auth.GET("/auth/me", h.Me)
 	auth.GET("/me/profile", h.GetMyProfile)
 	auth.POST("/me/profile", h.SaveMyProfile)
+	auth.GET("/me/following", h.GetMyFollowing)
+	auth.GET("/me/followers", h.GetMyFollowers)
 	auth.GET("/users/:userId", h.GetUserProfile)
+	auth.GET("/users/:userId/workout-records", h.ListUserWorkoutRecords)
+	auth.POST("/users/:userId/follow", h.FollowUser)
+	auth.DELETE("/users/:userId/follow", h.UnfollowUser)
 	auth.GET("/timeline", h.GetTimeline)
+	auth.GET("/recommendations", h.GetRecommendations)
+	auth.GET("/support-targets", h.GetSupportTargets)
+	auth.POST("/supports", h.CreateSupport)
+	auth.GET("/notifications", h.GetNotifications)
+	auth.PUT("/notifications/:notificationId/read", h.MarkNotificationRead)
 	auth.POST("/workout-records", h.CreateWorkoutRecord)
 	auth.PUT("/workout-records/:id", h.UpdateWorkoutRecord)
 	auth.GET("/workout-records", h.ListWorkoutRecords)
@@ -367,6 +650,8 @@ func newTestRouter(t *testing.T) (http.Handler, *model.User, string) {
 	auth.GET("/workout-records/:id", h.GetWorkoutRecord)
 	auth.POST("/posts", h.CreateTrainingPost)
 	auth.GET("/posts/:postId", h.GetTrainingPost)
+	auth.POST("/posts/:postId/like", h.LikeTrainingPost)
+	auth.DELETE("/posts/:postId/like", h.UnlikeTrainingPost)
 
 	return r, seedUser, "test-secret"
 }
@@ -449,10 +734,21 @@ func TestProtectedRoutesRequireBearerToken(t *testing.T) {
 	}{
 		{name: "me", method: http.MethodGet, path: "/api/auth/me"},
 		{name: "profile", method: http.MethodGet, path: "/api/me/profile"},
+		{name: "following", method: http.MethodGet, path: "/api/me/following"},
+		{name: "followers", method: http.MethodGet, path: "/api/me/followers"},
 		{name: "timeline", method: http.MethodGet, path: "/api/timeline?source=following"},
+		{name: "recommendations", method: http.MethodGet, path: "/api/recommendations"},
+		{name: "support targets", method: http.MethodGet, path: "/api/support-targets"},
+		{name: "create support", method: http.MethodPost, path: "/api/supports", body: `{"receiverUserId":2}`},
+		{name: "notifications", method: http.MethodGet, path: "/api/notifications"},
+		{name: "notification read", method: http.MethodPut, path: "/api/notifications/1/read"},
 		{name: "workout records", method: http.MethodGet, path: "/api/workout-records"},
 		{name: "create workout record", method: http.MethodPost, path: "/api/workout-records", body: `{}`},
 		{name: "create post", method: http.MethodPost, path: "/api/posts", body: `{"didTrain":true,"trainedOn":"2026-05-28"}`},
+		{name: "like post", method: http.MethodPost, path: "/api/posts/1/like"},
+		{name: "unlike post", method: http.MethodDelete, path: "/api/posts/1/like"},
+		{name: "follow user", method: http.MethodPost, path: "/api/users/2/follow"},
+		{name: "unfollow user", method: http.MethodDelete, path: "/api/users/2/follow"},
 	}
 
 	for _, tt := range tests {
@@ -569,6 +865,584 @@ func TestGetTrainingPost(t *testing.T) {
 	}
 	if resp.ID != 1 || resp.Author.Username != "Timeline Author" {
 		t.Fatalf("unexpected post response: %+v", resp)
+	}
+}
+
+func TestLikeTrainingPostPersistsStatus(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	likeReq := httptest.NewRequest(http.MethodPost, "/api/posts/1/like", nil)
+	likeReq.Header.Set("Authorization", "Bearer "+token)
+	likeResp := httptest.NewRecorder()
+
+	router.ServeHTTP(likeResp, likeReq)
+	if likeResp.Code != http.StatusOK {
+		t.Fatalf("expected like status 200, got %d: %s", likeResp.Code, likeResp.Body.String())
+	}
+
+	var liked struct {
+		LikedByMe bool `json:"likedByMe"`
+		LikeCount int  `json:"likeCount"`
+	}
+	if err := json.NewDecoder(likeResp.Body).Decode(&liked); err != nil {
+		t.Fatalf("failed to decode like response: %v", err)
+	}
+	if !liked.LikedByMe || liked.LikeCount != 1 {
+		t.Fatalf("unexpected like response: %+v", liked)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/posts/1", nil)
+	getReq.Header.Set("Authorization", "Bearer "+token)
+	getResp := httptest.NewRecorder()
+	router.ServeHTTP(getResp, getReq)
+	if getResp.Code != http.StatusOK {
+		t.Fatalf("expected post status 200, got %d: %s", getResp.Code, getResp.Body.String())
+	}
+
+	var post struct {
+		LikedByMe bool `json:"likedByMe"`
+		LikeCount int  `json:"likeCount"`
+	}
+	if err := json.NewDecoder(getResp.Body).Decode(&post); err != nil {
+		t.Fatalf("failed to decode post response: %v", err)
+	}
+	if !post.LikedByMe || post.LikeCount != 1 {
+		t.Fatalf("expected liked status in post detail, got %+v", post)
+	}
+}
+
+func TestUnlikeTrainingPostPersistsStatus(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	likeReq := httptest.NewRequest(http.MethodPost, "/api/posts/1/like", nil)
+	likeReq.Header.Set("Authorization", "Bearer "+token)
+	router.ServeHTTP(httptest.NewRecorder(), likeReq)
+
+	unlikeReq := httptest.NewRequest(http.MethodDelete, "/api/posts/1/like", nil)
+	unlikeReq.Header.Set("Authorization", "Bearer "+token)
+	unlikeResp := httptest.NewRecorder()
+
+	router.ServeHTTP(unlikeResp, unlikeReq)
+	if unlikeResp.Code != http.StatusOK {
+		t.Fatalf("expected unlike status 200, got %d: %s", unlikeResp.Code, unlikeResp.Body.String())
+	}
+
+	var unliked struct {
+		LikedByMe bool `json:"likedByMe"`
+		LikeCount int  `json:"likeCount"`
+	}
+	if err := json.NewDecoder(unlikeResp.Body).Decode(&unliked); err != nil {
+		t.Fatalf("failed to decode unlike response: %v", err)
+	}
+	if unliked.LikedByMe || unliked.LikeCount != 0 {
+		t.Fatalf("unexpected unlike response: %+v", unliked)
+	}
+}
+
+func TestLikeTrainingPostReturnsNotFound(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/posts/999/like", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestFollowUserPersistsStatus(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/users/2/follow", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected follow status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var followed struct {
+		Following bool `json:"following"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&followed); err != nil {
+		t.Fatalf("failed to decode follow response: %v", err)
+	}
+	if !followed.Following {
+		t.Fatalf("expected following true, got %+v", followed)
+	}
+
+	profileReq := httptest.NewRequest(http.MethodGet, "/api/users/2", nil)
+	profileReq.Header.Set("Authorization", "Bearer "+token)
+	profileResp := httptest.NewRecorder()
+	router.ServeHTTP(profileResp, profileReq)
+	if profileResp.Code != http.StatusOK {
+		t.Fatalf("expected profile status 200, got %d: %s", profileResp.Code, profileResp.Body.String())
+	}
+
+	var profilePayload struct {
+		Profile struct {
+			Following *bool `json:"following"`
+		} `json:"profile"`
+	}
+	if err := json.NewDecoder(profileResp.Body).Decode(&profilePayload); err != nil {
+		t.Fatalf("failed to decode profile response: %v", err)
+	}
+	if profilePayload.Profile.Following == nil || !*profilePayload.Profile.Following {
+		t.Fatalf("expected profile following true, got %+v", profilePayload)
+	}
+}
+
+func TestGetMyFollowing(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	followReq := httptest.NewRequest(http.MethodPost, "/api/users/2/follow", nil)
+	followReq.Header.Set("Authorization", "Bearer "+token)
+	router.ServeHTTP(httptest.NewRecorder(), followReq)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/me/following", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected following status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Items []struct {
+			UserID   int    `json:"userId"`
+			Username string `json:"username"`
+			Handle   string `json:"handle"`
+			Relation string `json:"relation"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode following response: %v", err)
+	}
+	if len(resp.Items) != 1 || resp.Items[0].UserID != 2 || resp.Items[0].Username != "Timeline Author" {
+		t.Fatalf("unexpected following response: %+v", resp)
+	}
+}
+
+func TestGetMyFollowers(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/me/followers", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected followers status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Items []struct {
+			UserID int `json:"userId"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode followers response: %v", err)
+	}
+	if len(resp.Items) != 0 {
+		t.Fatalf("expected empty followers response, got %+v", resp)
+	}
+}
+
+func TestGetRecommendations(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/recommendations", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected recommendations status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Items []struct {
+			User struct {
+				ID       int    `json:"id"`
+				Username string `json:"username"`
+				Tags     []struct {
+					ID    int    `json:"id"`
+					Label string `json:"label"`
+				} `json:"tags"`
+			} `json:"user"`
+			Status      int    `json:"status"`
+			StatusLabel string `json:"statusLabel"`
+			IsFollowing bool   `json:"isFollowing"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode recommendations response: %v", err)
+	}
+	if len(resp.Items) != 1 {
+		t.Fatalf("expected one recommendation, got %+v", resp)
+	}
+	item := resp.Items[0]
+	if item.User.ID != 2 || item.User.Username != "Timeline Author" || item.Status != 1 || item.StatusLabel == "" || item.IsFollowing {
+		t.Fatalf("unexpected recommendation item: %+v", item)
+	}
+	if len(item.User.Tags) != 2 || item.User.Tags[0].ID != 2 || item.User.Tags[1].ID != 5 {
+		t.Fatalf("unexpected recommendation tags: %+v", item.User.Tags)
+	}
+}
+
+func TestGetRecommendationsKeepsFollowedUsersInDailySlots(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	followReq := httptest.NewRequest(http.MethodPost, "/api/users/2/follow", nil)
+	followReq.Header.Set("Authorization", "Bearer "+token)
+	router.ServeHTTP(httptest.NewRecorder(), followReq)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/recommendations", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected recommendations status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Items []struct {
+			User struct {
+				ID int `json:"id"`
+			} `json:"user"`
+			Status      int  `json:"status"`
+			IsFollowing bool `json:"isFollowing"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode recommendations response: %v", err)
+	}
+	if len(resp.Items) != 1 || resp.Items[0].User.ID != 2 || !resp.Items[0].IsFollowing || resp.Items[0].Status != 2 {
+		t.Fatalf("expected followed user to stay in recommendations, got %+v", resp)
+	}
+}
+
+func TestGetSupportTargetsReturnsInactiveFollowees(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	seedToken := loginToken(t, router)
+
+	signupBody := bytes.NewBufferString(`{"email":"inactive@example.com","password":"password123"}`)
+	signupReq := httptest.NewRequest(http.MethodPost, "/api/auth/signup", signupBody)
+	signupReq.Header.Set("Content-Type", "application/json")
+	signupResp := httptest.NewRecorder()
+	router.ServeHTTP(signupResp, signupReq)
+	if signupResp.Code != http.StatusCreated {
+		t.Fatalf("expected signup status 201, got %d: %s", signupResp.Code, signupResp.Body.String())
+	}
+
+	inactiveLoginBody := bytes.NewBufferString(`{"email":"inactive@example.com","password":"password123"}`)
+	inactiveLoginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", inactiveLoginBody)
+	inactiveLoginResp := httptest.NewRecorder()
+	router.ServeHTTP(inactiveLoginResp, inactiveLoginReq)
+	if inactiveLoginResp.Code != http.StatusOK {
+		t.Fatalf("expected inactive login status 200, got %d: %s", inactiveLoginResp.Code, inactiveLoginResp.Body.String())
+	}
+	var inactiveLogin struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(inactiveLoginResp.Body).Decode(&inactiveLogin); err != nil {
+		t.Fatalf("failed to decode inactive login response: %v", err)
+	}
+
+	profileBody := bytes.NewBufferString(`{"username":"Inactive User","trainingFrequencyDays":3}`)
+	profileReq := httptest.NewRequest(http.MethodPost, "/api/me/profile", profileBody)
+	profileReq.Header.Set("Authorization", "Bearer "+inactiveLogin.Token)
+	profileReq.Header.Set("Content-Type", "application/json")
+	profileResp := httptest.NewRecorder()
+	router.ServeHTTP(profileResp, profileReq)
+	if profileResp.Code != http.StatusOK {
+		t.Fatalf("expected profile status 200, got %d: %s", profileResp.Code, profileResp.Body.String())
+	}
+
+	postBody := bytes.NewBufferString(`{"didTrain":true,"trainedOn":"2000-01-01"}`)
+	postReq := httptest.NewRequest(http.MethodPost, "/api/posts", postBody)
+	postReq.Header.Set("Authorization", "Bearer "+inactiveLogin.Token)
+	postReq.Header.Set("Content-Type", "application/json")
+	postResp := httptest.NewRecorder()
+	router.ServeHTTP(postResp, postReq)
+	if postResp.Code != http.StatusCreated {
+		t.Fatalf("expected post status 201, got %d: %s", postResp.Code, postResp.Body.String())
+	}
+
+	followReq := httptest.NewRequest(http.MethodPost, "/api/users/3/follow", nil)
+	followReq.Header.Set("Authorization", "Bearer "+seedToken)
+	followResp := httptest.NewRecorder()
+	router.ServeHTTP(followResp, followReq)
+	if followResp.Code != http.StatusOK {
+		t.Fatalf("expected follow status 200, got %d: %s", followResp.Code, followResp.Body.String())
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/support-targets", nil)
+	req.Header.Set("Authorization", "Bearer "+seedToken)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected support targets status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Items []struct {
+			User struct {
+				ID       int    `json:"id"`
+				Username string `json:"username"`
+			} `json:"user"`
+			LastTrainedOn         string `json:"lastTrainedOn"`
+			TrainingFrequencyDays int    `json:"trainingFrequencyDays"`
+			DaysWithoutTraining   int    `json:"daysWithoutTraining"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode support targets response: %v", err)
+	}
+	if len(resp.Items) != 1 {
+		t.Fatalf("expected one support target, got %+v", resp)
+	}
+	item := resp.Items[0]
+	if item.User.ID != 3 || item.User.Username != "Inactive User" {
+		t.Fatalf("unexpected support target user: %+v", item.User)
+	}
+	if item.LastTrainedOn != "2000-01-01" || item.TrainingFrequencyDays != 3 || item.DaysWithoutTraining <= 3 {
+		t.Fatalf("unexpected support target item: %+v", item)
+	}
+}
+
+func TestCreateSupportCreatesNotificationAndMarksRead(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	seedToken := loginToken(t, router)
+
+	seedProfileBody := bytes.NewBufferString(`{"username":"Support Sender","trainingFrequencyDays":3}`)
+	seedProfileReq := httptest.NewRequest(http.MethodPost, "/api/me/profile", seedProfileBody)
+	seedProfileReq.Header.Set("Authorization", "Bearer "+seedToken)
+	seedProfileReq.Header.Set("Content-Type", "application/json")
+	seedProfileResp := httptest.NewRecorder()
+	router.ServeHTTP(seedProfileResp, seedProfileReq)
+	if seedProfileResp.Code != http.StatusOK {
+		t.Fatalf("expected seed profile status 200, got %d: %s", seedProfileResp.Code, seedProfileResp.Body.String())
+	}
+
+	signupBody := bytes.NewBufferString(`{"email":"support-receiver@example.com","password":"password123"}`)
+	signupReq := httptest.NewRequest(http.MethodPost, "/api/auth/signup", signupBody)
+	signupReq.Header.Set("Content-Type", "application/json")
+	signupResp := httptest.NewRecorder()
+	router.ServeHTTP(signupResp, signupReq)
+	if signupResp.Code != http.StatusCreated {
+		t.Fatalf("expected signup status 201, got %d: %s", signupResp.Code, signupResp.Body.String())
+	}
+
+	receiverLoginBody := bytes.NewBufferString(`{"email":"support-receiver@example.com","password":"password123"}`)
+	receiverLoginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", receiverLoginBody)
+	receiverLoginResp := httptest.NewRecorder()
+	router.ServeHTTP(receiverLoginResp, receiverLoginReq)
+	if receiverLoginResp.Code != http.StatusOK {
+		t.Fatalf("expected receiver login status 200, got %d: %s", receiverLoginResp.Code, receiverLoginResp.Body.String())
+	}
+	var receiverLogin struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(receiverLoginResp.Body).Decode(&receiverLogin); err != nil {
+		t.Fatalf("failed to decode receiver login response: %v", err)
+	}
+
+	receiverProfileBody := bytes.NewBufferString(`{"username":"Support Receiver","trainingFrequencyDays":2}`)
+	receiverProfileReq := httptest.NewRequest(http.MethodPost, "/api/me/profile", receiverProfileBody)
+	receiverProfileReq.Header.Set("Authorization", "Bearer "+receiverLogin.Token)
+	receiverProfileReq.Header.Set("Content-Type", "application/json")
+	receiverProfileResp := httptest.NewRecorder()
+	router.ServeHTTP(receiverProfileResp, receiverProfileReq)
+	if receiverProfileResp.Code != http.StatusOK {
+		t.Fatalf("expected receiver profile status 200, got %d: %s", receiverProfileResp.Code, receiverProfileResp.Body.String())
+	}
+
+	postBody := bytes.NewBufferString(`{"didTrain":true,"trainedOn":"2000-01-01"}`)
+	postReq := httptest.NewRequest(http.MethodPost, "/api/posts", postBody)
+	postReq.Header.Set("Authorization", "Bearer "+receiverLogin.Token)
+	postReq.Header.Set("Content-Type", "application/json")
+	postResp := httptest.NewRecorder()
+	router.ServeHTTP(postResp, postReq)
+	if postResp.Code != http.StatusCreated {
+		t.Fatalf("expected post status 201, got %d: %s", postResp.Code, postResp.Body.String())
+	}
+
+	meReq := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+	meReq.Header.Set("Authorization", "Bearer "+receiverLogin.Token)
+	meResp := httptest.NewRecorder()
+	router.ServeHTTP(meResp, meReq)
+	if meResp.Code != http.StatusOK {
+		t.Fatalf("expected receiver me status 200, got %d: %s", meResp.Code, meResp.Body.String())
+	}
+	var receiver struct {
+		ID int `json:"id"`
+	}
+	if err := json.NewDecoder(meResp.Body).Decode(&receiver); err != nil {
+		t.Fatalf("failed to decode receiver me response: %v", err)
+	}
+
+	followReq := httptest.NewRequest(http.MethodPost, "/api/users/"+strconv.Itoa(receiver.ID)+"/follow", nil)
+	followReq.Header.Set("Authorization", "Bearer "+seedToken)
+	followResp := httptest.NewRecorder()
+	router.ServeHTTP(followResp, followReq)
+	if followResp.Code != http.StatusOK {
+		t.Fatalf("expected follow status 200, got %d: %s", followResp.Code, followResp.Body.String())
+	}
+
+	supportBody := bytes.NewBufferString(`{"receiverUserId":` + strconv.Itoa(receiver.ID) + `}`)
+	supportReq := httptest.NewRequest(http.MethodPost, "/api/supports", supportBody)
+	supportReq.Header.Set("Authorization", "Bearer "+seedToken)
+	supportReq.Header.Set("Content-Type", "application/json")
+	supportResp := httptest.NewRecorder()
+	router.ServeHTTP(supportResp, supportReq)
+	if supportResp.Code != http.StatusCreated {
+		t.Fatalf("expected support status 201, got %d: %s", supportResp.Code, supportResp.Body.String())
+	}
+	var supportPayload struct {
+		ID             int    `json:"id"`
+		ReceiverUserID int    `json:"receiverUserId"`
+		CreatedAt      string `json:"createdAt"`
+	}
+	if err := json.NewDecoder(supportResp.Body).Decode(&supportPayload); err != nil {
+		t.Fatalf("failed to decode support response: %v", err)
+	}
+	if supportPayload.ID == 0 || supportPayload.ReceiverUserID != receiver.ID || supportPayload.CreatedAt == "" {
+		t.Fatalf("unexpected support response: %+v", supportPayload)
+	}
+
+	notificationsReq := httptest.NewRequest(http.MethodGet, "/api/notifications?unreadOnly=true", nil)
+	notificationsReq.Header.Set("Authorization", "Bearer "+receiverLogin.Token)
+	notificationsResp := httptest.NewRecorder()
+	router.ServeHTTP(notificationsResp, notificationsReq)
+	if notificationsResp.Code != http.StatusOK {
+		t.Fatalf("expected notifications status 200, got %d: %s", notificationsResp.Code, notificationsResp.Body.String())
+	}
+	var notificationsPayload struct {
+		Items []struct {
+			ID                    int    `json:"id"`
+			NotificationType      int    `json:"notificationType"`
+			NotificationTypeLabel string `json:"notificationTypeLabel"`
+			Body                  string `json:"body"`
+			SupportMessageID      *int   `json:"supportMessageId"`
+			IsRead                bool   `json:"isRead"`
+		} `json:"items"`
+		NextCursor *string `json:"nextCursor"`
+	}
+	if err := json.NewDecoder(notificationsResp.Body).Decode(&notificationsPayload); err != nil {
+		t.Fatalf("failed to decode notifications response: %v", err)
+	}
+	if len(notificationsPayload.Items) != 1 {
+		t.Fatalf("expected one notification, got %+v", notificationsPayload)
+	}
+	notification := notificationsPayload.Items[0]
+	if notification.NotificationType != service.NotificationTypeSupport || notification.NotificationTypeLabel != "応援" || notification.Body != "Support Senderさんから応援が届きました" {
+		t.Fatalf("unexpected notification: %+v", notification)
+	}
+	if notification.SupportMessageID == nil || *notification.SupportMessageID != supportPayload.ID || notification.IsRead {
+		t.Fatalf("unexpected notification linkage/read state: %+v", notification)
+	}
+
+	readReq := httptest.NewRequest(http.MethodPut, "/api/notifications/"+strconv.Itoa(notification.ID)+"/read", nil)
+	readReq.Header.Set("Authorization", "Bearer "+receiverLogin.Token)
+	readResp := httptest.NewRecorder()
+	router.ServeHTTP(readResp, readReq)
+	if readResp.Code != http.StatusOK {
+		t.Fatalf("expected read status 200, got %d: %s", readResp.Code, readResp.Body.String())
+	}
+	var readPayload struct {
+		ID     int    `json:"id"`
+		IsRead bool   `json:"isRead"`
+		ReadAt string `json:"readAt"`
+	}
+	if err := json.NewDecoder(readResp.Body).Decode(&readPayload); err != nil {
+		t.Fatalf("failed to decode read response: %v", err)
+	}
+	if readPayload.ID != notification.ID || !readPayload.IsRead || readPayload.ReadAt == "" {
+		t.Fatalf("unexpected read response: %+v", readPayload)
+	}
+
+	unreadReq := httptest.NewRequest(http.MethodGet, "/api/notifications?unreadOnly=true", nil)
+	unreadReq.Header.Set("Authorization", "Bearer "+receiverLogin.Token)
+	unreadResp := httptest.NewRecorder()
+	router.ServeHTTP(unreadResp, unreadReq)
+	if unreadResp.Code != http.StatusOK {
+		t.Fatalf("expected unread status 200, got %d: %s", unreadResp.Code, unreadResp.Body.String())
+	}
+	var unreadPayload struct {
+		Items []struct {
+			ID int `json:"id"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(unreadResp.Body).Decode(&unreadPayload); err != nil {
+		t.Fatalf("failed to decode unread response: %v", err)
+	}
+	if len(unreadPayload.Items) != 0 {
+		t.Fatalf("expected no unread notifications, got %+v", unreadPayload)
+	}
+}
+
+func TestUnfollowUserPersistsStatus(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	followReq := httptest.NewRequest(http.MethodPost, "/api/users/2/follow", nil)
+	followReq.Header.Set("Authorization", "Bearer "+token)
+	router.ServeHTTP(httptest.NewRecorder(), followReq)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/users/2/follow", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected unfollow status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var followed struct {
+		Following bool `json:"following"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&followed); err != nil {
+		t.Fatalf("failed to decode unfollow response: %v", err)
+	}
+	if followed.Following {
+		t.Fatalf("expected following false, got %+v", followed)
+	}
+}
+
+func TestFollowUserRejectsSelf(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/users/1/follow", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestFollowUserReturnsNotFound(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	token := loginToken(t, router)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/users/999/follow", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

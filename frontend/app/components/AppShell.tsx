@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import styles from "../page.module.css";
 import type { View } from "../types/workout";
 import { BottomNav } from "./BottomNav";
+import { BellIcon } from "./icons";
 
 export function AppShell({
   activeView,
@@ -25,8 +26,13 @@ export function AppShell({
           onQuickStart={() => router.push("/quick-start")}
           onProfile={() => router.push("/profile")}
         />
-        <button className={styles.help} type="button" aria-label="ヘルプを開く">
-          ?
+        <button
+          className={`${styles.help} ${activeView === "notifications" ? styles.activeNotificationButton : ""}`}
+          onClick={() => router.push("/notifications")}
+          type="button"
+          aria-label="通知を開く"
+        >
+          <BellIcon />
         </button>
       </section>
     </main>

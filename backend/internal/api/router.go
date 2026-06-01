@@ -39,12 +39,22 @@ func NewRouter(db *gorm.DB, jwtSecret string) http.Handler {
 	auth.GET("/me/profile", h.GetMyProfile)
 	auth.POST("/me/profile", h.SaveMyProfile)
 	auth.PUT("/me/profile", h.SaveMyProfile)
+	auth.GET("/me/following", h.GetMyFollowing)
+	auth.GET("/me/followers", h.GetMyFollowers)
 
 	auth.GET("/users", h.GetAllUsers)
 	auth.GET("/users/get", h.GetUser)
 	auth.GET("/users/:userId", h.GetUserProfile)
+	auth.GET("/users/:userId/workout-records", h.ListUserWorkoutRecords)
+	auth.POST("/users/:userId/follow", h.FollowUser)
+	auth.DELETE("/users/:userId/follow", h.UnfollowUser)
 
 	auth.GET("/timeline", h.GetTimeline)
+	auth.GET("/recommendations", h.GetRecommendations)
+	auth.GET("/support-targets", h.GetSupportTargets)
+	auth.POST("/supports", h.CreateSupport)
+	auth.GET("/notifications", h.GetNotifications)
+	auth.PUT("/notifications/:notificationId/read", h.MarkNotificationRead)
 
 	auth.GET("/workout-records", h.ListWorkoutRecords)
 	auth.POST("/workout-records", h.CreateWorkoutRecord)
@@ -54,8 +64,10 @@ func NewRouter(db *gorm.DB, jwtSecret string) http.Handler {
 
 	auth.POST("/posts", h.CreateTrainingPost)
 	auth.GET("/posts/:postId", h.GetTrainingPost)
+	auth.POST("/posts/:postId/like", h.LikeTrainingPost)
+	auth.DELETE("/posts/:postId/like", h.UnlikeTrainingPost)
 
-	log.Println("Registered routes: /health, /api/auth/login, /api/auth/me, /api/me/profile, /api/users, /api/workout-records, /api/posts")
+	log.Println("Registered routes: /health, /api/auth/login, /api/auth/me, /api/me/profile, /api/users, /api/timeline, /api/recommendations, /api/support-targets, /api/supports, /api/notifications, /api/workout-records, /api/posts")
 
 	return r
 }

@@ -78,3 +78,12 @@ export function PlusIcon() {
     </svg>
   );
 }
+
+export function BellIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6.8 10.4c0-3.3 2.1-5.8 5.2-5.8s5.2 2.5 5.2 5.8v3.3l1.7 2.7H5.1l1.7-2.7z" />
+      <path d="M9.8 18.2a2.4 2.4 0 0 0 4.4 0" />
+    </svg>
+  );
+}

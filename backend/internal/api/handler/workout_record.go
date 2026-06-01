@@ -39,6 +39,29 @@ func (h *Handler) ListWorkoutRecords(c *gin.Context) {
 	c.JSON(http.StatusOK, records)
 }
 
+// ListUserWorkoutRecords returns workout records visible on another user's profile.
+func (h *Handler) ListUserWorkoutRecords(c *gin.Context) {
+	user, err := h.currentUserFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID, err := strconv.Atoi(c.Param("userId"))
+	if err != nil || userID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	records, err := h.service.GetVisibleWorkoutRecords(userID, user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, records)
+}
+
 // GetWorkoutRecord はログイン中ユーザーの運動記録を1件返します。
 func (h *Handler) GetWorkoutRecord(c *gin.Context) {
 	user, err := h.currentUserFromContext(c)

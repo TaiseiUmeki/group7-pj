@@ -9,6 +9,11 @@ import styles from "../../page.module.css";
 import type { Profile, TimelinePost } from "../../types/workout";
 import { mapTimelineItemToPost, type TimelineApiItem } from "../../utils/apiMappers";
 
+type PostLikeResponse = {
+  likedByMe: boolean;
+  likeCount: number;
+};
+
 export default function PostDetailPage() {
   const params = useParams<{ postId: string }>();
   const router = useRouter();
@@ -60,9 +65,38 @@ export default function PostDetailPage() {
     }
   };
 
-  const toggleLike = (postID: TimelinePost["id"]) => {
+  const toggleLike = async (postID: TimelinePost["id"]) => {
+    const token = window.localStorage.getItem("group7pj_token");
+    if (!token) {
+      setDetailError("ログイン情報を確認できません。もう一度ログインしてください。");
+      return;
+    }
+
+    const liked = likedPostIDs.includes(postID);
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+    const response = await fetch(`${apiUrl}/api/posts/${postID}/like`, {
+      method: liked ? "DELETE" : "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const payload = (await response.json().catch(() => null)) as PostLikeResponse | { error?: string } | null;
+    if (!response.ok || !payload || !("likedByMe" in payload)) {
+      const message = payload && "error" in payload ? payload.error : undefined;
+      setDetailError(message || "いいねを更新できませんでした。");
+      return;
+    }
+
+    setDetailError("");
     setLikedPostIDs((ids) => (
-      ids.includes(postID) ? ids.filter((id) => id !== postID) : [...ids, postID]
+      payload.likedByMe
+        ? Array.from(new Set([...ids, postID]))
+        : ids.filter((id) => id !== postID)
+    ));
+    setPost((currentPost) => (
+      currentPost && currentPost.id === postID
+        ? { ...currentPost, likes: payload.likedByMe ? Math.max(0, payload.likeCount - 1) : payload.likeCount }
+        : currentPost
     ));
   };
 

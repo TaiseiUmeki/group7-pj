@@ -25,6 +25,10 @@ func (s *Service) GetWorkoutRecords(userID int) ([]*model.WorkoutRecord, error) 
 	return s.repo.GetWorkoutRecordsByUserID(userID)
 }
 
+func (s *Service) GetVisibleWorkoutRecords(userID int, viewerUserID int) ([]*model.WorkoutRecord, error) {
+	return s.repo.GetVisibleWorkoutRecordsByUserID(userID, viewerUserID, time.Now())
+}
+
 // GetLatestWorkoutRecord returns the most recent workout record for the user
 func (s *Service) GetLatestWorkoutRecord(userID int) (*model.WorkoutRecord, error) {
 	return s.repo.GetLatestWorkoutRecordByUserID(userID)

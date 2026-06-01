@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"backend/internal/repository"
 	"backend/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -60,19 +62,80 @@ func (h *Handler) GetUser(c *gin.Context) {
 
 // GetUserProfile は指定ユーザーのプロフィール情報を取得します。
 func (h *Handler) GetUserProfile(c *gin.Context) {
+	user, err := h.currentUserFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
 	id, err := strconv.Atoi(c.Param("userId"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
 		return
 	}
 
-	profile, err := h.service.GetUserProfile(id)
+	profile, err := h.service.GetUserProfileForViewer(user.ID, id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"profile": profile})
+}
+
+// FollowUser は指定ユーザーをフォローします。
+func (h *Handler) FollowUser(c *gin.Context) {
+	user, err := h.currentUserFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	followeeUserID, err := strconv.Atoi(c.Param("userId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	status, err := h.service.FollowUser(user.ID, followeeUserID)
+	if err != nil {
+		writeFollowError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, status)
+}
+
+// UnfollowUser は指定ユーザーのフォローを解除します。
+func (h *Handler) UnfollowUser(c *gin.Context) {
+	user, err := h.currentUserFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	followeeUserID, err := strconv.Atoi(c.Param("userId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	status, err := h.service.UnfollowUser(user.ID, followeeUserID)
+	if err != nil {
+		writeFollowError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, status)
+}
+
+func writeFollowError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, service.ErrCannotFollowSelf):
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	case errors.Is(err, repository.ErrUserNotFound), errors.Is(err, repository.ErrProfileNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
 }
 
 // Login はメールアドレスとパスワードでJWTを発行します
@@ -116,8 +179,9 @@ func (h *Handler) Signup(c *gin.Context) {
 		return
 	}
 
-	user.PasswordHash = ""
-	c.JSON(http.StatusCreated, user)
+	responseUser := *user
+	responseUser.PasswordHash = ""
+	c.JSON(http.StatusCreated, responseUser)
 }
 
 // Me はJWTの内容から現在のユーザーを返します

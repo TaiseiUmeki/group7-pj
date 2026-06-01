@@ -19,6 +19,7 @@ var ErrWorkoutRecordNotFound = errors.New("workout record not found")
 var ErrProfileNotFound = errors.New("profile not found")
 
 var ErrTrainingPostNotFound = errors.New("training post not found")
+var ErrNotificationNotFound = errors.New("notification not found")
 
 // Repository はデータベースアクセス層のインターフェースです
 type Repository interface {
@@ -38,6 +39,7 @@ type Repository interface {
 	// WorkoutRecord関連
 	GetWorkoutRecordByIDAndUserID(id, userID int) (*model.WorkoutRecord, error)
 	GetWorkoutRecordsByUserID(userID int) ([]*model.WorkoutRecord, error)
+	GetVisibleWorkoutRecordsByUserID(userID int, viewerUserID int, currentDate time.Time) ([]*model.WorkoutRecord, error)
 	GetLatestWorkoutRecordByUserID(userID int) (*model.WorkoutRecord, error)
 	CreateWorkoutRecord(record *model.WorkoutRecord) error
 	UpdateWorkoutRecord(record *model.WorkoutRecord) error
@@ -47,6 +49,21 @@ type Repository interface {
 	CreateTrainingPost(post *model.TrainingPost) error
 	ListTimelinePosts(input TimelineQuery) ([]TimelinePostRow, error)
 	GetTimelinePostByID(postID int, currentUserID int) (*TimelinePostRow, error)
+	CreatePostLike(postID int, userID int) error
+	DeletePostLike(postID int, userID int) error
+	GetPostLikeStatus(postID int, userID int) (PostLikeStatus, error)
+
+	// Follow関連
+	CreateFollow(followerUserID int, followeeUserID int) error
+	DeleteFollow(followerUserID int, followeeUserID int) error
+	GetFollowStatus(followerUserID int, followeeUserID int) (FollowStatus, error)
+	ListFollowingProfiles(userID int) ([]FollowConnectionRow, error)
+	ListFollowerProfiles(userID int) ([]FollowConnectionRow, error)
+	ListDailyRecommendationProfiles(input RecommendationQuery) ([]RecommendationRow, error)
+	ListSupportTargetRows(userID int, currentDate time.Time) ([]SupportTargetRow, error)
+	CreateSupportWithNotification(support *model.SupportMessage, notification *model.Notification) error
+	ListNotificationRows(input NotificationQuery) ([]NotificationRow, error)
+	MarkNotificationRead(userID int, notificationID int, readAt time.Time) (*model.Notification, error)
 }
 
 type TimelineQuery struct {
@@ -78,6 +95,60 @@ type TimelinePostRow struct {
 	TrainingFrequencyDays int
 	LikeCount             int
 	LikedByMe             bool
+}
+
+type PostLikeStatus struct {
+	LikeCount int  `json:"likeCount"`
+	LikedByMe bool `json:"likedByMe"`
+}
+
+type FollowStatus struct {
+	Following bool `json:"following"`
+}
+
+type FollowConnectionRow struct {
+	UserID   int
+	Username string
+}
+
+type RecommendationQuery struct {
+	UserID      int
+	CurrentDate time.Time
+	Limit       int
+}
+
+type RecommendationRow struct {
+	ProfileID    int
+	UserID       int
+	Username     string
+	Status       int
+	DisplayOrder int
+	Following    bool
+}
+
+type SupportTargetRow struct {
+	UserID                int
+	Username              string
+	LastTrainedOn         time.Time
+	TrainingFrequencyDays int
+}
+
+type NotificationQuery struct {
+	UserID     int
+	Limit      int
+	CursorTime *time.Time
+	CursorID   *int
+	UnreadOnly bool
+}
+
+type NotificationRow struct {
+	ID               int
+	NotificationType int
+	Body             string
+	TrainingPostID   *int
+	SupportMessageID *int
+	IsRead           bool
+	CreatedAt        time.Time
 }
 
 // MySQLRepository はMySQL用のRepository実装です
@@ -221,6 +292,48 @@ func (r *MySQLRepository) GetWorkoutRecordsByUserID(userID int) ([]*model.Workou
 	return records, nil
 }
 
+// GetVisibleWorkoutRecordsByUserID returns workout records visible to the viewer.
+func (r *MySQLRepository) GetVisibleWorkoutRecordsByUserID(userID int, viewerUserID int, currentDate time.Time) ([]*model.WorkoutRecord, error) {
+	if userID == viewerUserID {
+		return r.GetWorkoutRecordsByUserID(userID)
+	}
+
+	var posts []*model.TrainingPost
+	err := r.db.
+		Where("user_id = ? AND deleted_at IS NULL", userID).
+		Where(`
+			visibility = ?
+			OR (
+				visibility = ?
+				AND EXISTS (
+					SELECT 1 FROM follows AS f
+					WHERE f.follower_user_id = ? AND f.followee_user_id = training_posts.user_id
+				)
+			)
+			OR (
+				visibility = ?
+				AND EXISTS (
+					SELECT 1 FROM recommendation_slots AS rs
+					WHERE rs.user_id = ?
+						AND rs.recommended_user_id = training_posts.user_id
+						AND rs.slot_date = ?
+						AND rs.status IN ?
+				)
+			)
+		`, "followers_and_recommended", "followers", viewerUserID, "recommended", viewerUserID, dateOnly(currentDate), []int{1, 2}).
+		Order("trained_on DESC, created_at DESC").
+		Find(&posts).Error
+	if err != nil {
+		return nil, err
+	}
+
+	records := make([]*model.WorkoutRecord, 0, len(posts))
+	for _, post := range posts {
+		records = append(records, workoutRecordFromTrainingPost(post))
+	}
+	return records, nil
+}
+
 // GetLatestWorkoutRecordByUserID はユーザーの最新の運動記録を取得します
 func (r *MySQLRepository) GetLatestWorkoutRecordByUserID(userID int) (*model.WorkoutRecord, error) {
 	var post model.TrainingPost
@@ -295,6 +408,326 @@ func (r *MySQLRepository) GetTimelinePostByID(postID int, currentUserID int) (*T
 	return &row, nil
 }
 
+func (r *MySQLRepository) CreatePostLike(postID int, userID int) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := ensureTrainingPostExists(tx, postID); err != nil {
+			return err
+		}
+
+		var existing model.PostLike
+		err := tx.Where("post_id = ? AND user_id = ?", postID, userID).First(&existing).Error
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		return tx.Create(&model.PostLike{PostID: postID, UserID: userID}).Error
+	})
+}
+
+func (r *MySQLRepository) DeletePostLike(postID int, userID int) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := ensureTrainingPostExists(tx, postID); err != nil {
+			return err
+		}
+		return tx.Where("post_id = ? AND user_id = ?", postID, userID).Delete(&model.PostLike{}).Error
+	})
+}
+
+func (r *MySQLRepository) GetPostLikeStatus(postID int, userID int) (PostLikeStatus, error) {
+	if err := ensureTrainingPostExists(r.db, postID); err != nil {
+		return PostLikeStatus{}, err
+	}
+
+	var likeCount int64
+	if err := r.db.Model(&model.PostLike{}).Where("post_id = ?", postID).Count(&likeCount).Error; err != nil {
+		return PostLikeStatus{}, err
+	}
+
+	var liked model.PostLike
+	err := r.db.Where("post_id = ? AND user_id = ?", postID, userID).First(&liked).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return PostLikeStatus{}, err
+	}
+
+	return PostLikeStatus{
+		LikeCount: int(likeCount),
+		LikedByMe: err == nil,
+	}, nil
+}
+
+func (r *MySQLRepository) CreateFollow(followerUserID int, followeeUserID int) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := ensureUserExists(tx, followeeUserID); err != nil {
+			return err
+		}
+
+		var existing model.Follow
+		err := tx.Where("follower_user_id = ? AND followee_user_id = ?", followerUserID, followeeUserID).First(&existing).Error
+		if err == nil {
+			return markRecommendationSlotFollowed(tx, followerUserID, followeeUserID)
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if err := tx.Create(&model.Follow{FollowerUserID: followerUserID, FolloweeUserID: followeeUserID}).Error; err != nil {
+			return err
+		}
+		return markRecommendationSlotFollowed(tx, followerUserID, followeeUserID)
+	})
+}
+
+func (r *MySQLRepository) DeleteFollow(followerUserID int, followeeUserID int) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := ensureUserExists(tx, followeeUserID); err != nil {
+			return err
+		}
+		if err := tx.Where("follower_user_id = ? AND followee_user_id = ?", followerUserID, followeeUserID).Delete(&model.Follow{}).Error; err != nil {
+			return err
+		}
+		return markRecommendationSlotActive(tx, followerUserID, followeeUserID)
+	})
+}
+
+func (r *MySQLRepository) GetFollowStatus(followerUserID int, followeeUserID int) (FollowStatus, error) {
+	if err := ensureUserExists(r.db, followeeUserID); err != nil {
+		return FollowStatus{}, err
+	}
+
+	var follow model.Follow
+	err := r.db.Where("follower_user_id = ? AND followee_user_id = ?", followerUserID, followeeUserID).First(&follow).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return FollowStatus{}, err
+	}
+	return FollowStatus{Following: err == nil}, nil
+}
+
+func (r *MySQLRepository) ListFollowingProfiles(userID int) ([]FollowConnectionRow, error) {
+	var rows []FollowConnectionRow
+	err := r.db.Table("follows AS f").
+		Select("p.user_id, p.username").
+		Joins("JOIN profiles AS p ON p.user_id = f.followee_user_id AND p.deleted_at IS NULL").
+		Where("f.follower_user_id = ?", userID).
+		Order("f.created_at DESC, f.id DESC").
+		Find(&rows).Error
+	return rows, err
+}
+
+func (r *MySQLRepository) ListFollowerProfiles(userID int) ([]FollowConnectionRow, error) {
+	var rows []FollowConnectionRow
+	err := r.db.Table("follows AS f").
+		Select("p.user_id, p.username").
+		Joins("JOIN profiles AS p ON p.user_id = f.follower_user_id AND p.deleted_at IS NULL").
+		Where("f.followee_user_id = ?", userID).
+		Order("f.created_at DESC, f.id DESC").
+		Find(&rows).Error
+	return rows, err
+}
+
+func (r *MySQLRepository) ListDailyRecommendationProfiles(input RecommendationQuery) ([]RecommendationRow, error) {
+	slotDate := dateOnly(input.CurrentDate)
+	limit := input.Limit
+	if limit <= 0 {
+		limit = 5
+	}
+
+	if err := r.db.Transaction(func(tx *gorm.DB) error {
+		var count int64
+		if err := tx.Table("recommendation_slots AS rs").
+			Joins("JOIN profiles AS p ON p.user_id = rs.recommended_user_id AND p.deleted_at IS NULL").
+			Where("rs.user_id = ? AND rs.slot_date = ? AND rs.status IN ?", input.UserID, slotDate, []int{1, 2}).
+			Count(&count).Error; err != nil {
+			return err
+		}
+		if int(count) >= limit {
+			return nil
+		}
+
+		var maxOrder int
+		if err := tx.Model(&model.RecommendationSlot{}).
+			Where("user_id = ? AND slot_date = ?", input.UserID, slotDate).
+			Select("COALESCE(MAX(display_order), 0)").
+			Scan(&maxOrder).Error; err != nil {
+			return err
+		}
+
+		remaining := limit - int(count)
+		var candidates []struct {
+			UserID int
+		}
+		if err := tx.Table("profiles AS p").
+			Select("p.user_id").
+			Joins("JOIN users AS u ON u.id = p.user_id AND u.deleted_at IS NULL").
+			Joins("LEFT JOIN follows AS f ON f.follower_user_id = ? AND f.followee_user_id = p.user_id", input.UserID).
+			Joins("LEFT JOIN recommendation_slots AS rs ON rs.user_id = ? AND rs.recommended_user_id = p.user_id AND rs.slot_date = ?", input.UserID, slotDate).
+			Where("p.deleted_at IS NULL AND p.user_id <> ? AND f.id IS NULL AND rs.id IS NULL", input.UserID).
+			Order("RAND()").
+			Limit(remaining).
+			Find(&candidates).Error; err != nil {
+			return err
+		}
+
+		for i, candidate := range candidates {
+			if err := tx.Create(&model.RecommendationSlot{
+				UserID:            input.UserID,
+				RecommendedUserID: candidate.UserID,
+				SlotDate:          slotDate,
+				DisplayOrder:      maxOrder + i + 1,
+				Status:            1,
+			}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	var rows []RecommendationRow
+	err := r.db.Table("recommendation_slots AS rs").
+		Select(`
+			p.id AS profile_id,
+			p.user_id,
+			p.username,
+			CASE WHEN f.id IS NULL THEN rs.status ELSE 2 END AS status,
+			rs.display_order,
+			CASE WHEN f.id IS NULL THEN FALSE ELSE TRUE END AS following
+		`).
+		Joins("JOIN profiles AS p ON p.user_id = rs.recommended_user_id AND p.deleted_at IS NULL").
+		Joins("LEFT JOIN follows AS f ON f.follower_user_id = rs.user_id AND f.followee_user_id = rs.recommended_user_id").
+		Where("rs.user_id = ? AND rs.slot_date = ? AND rs.status IN ?", input.UserID, slotDate, []int{1, 2}).
+		Order("rs.display_order ASC, rs.id ASC").
+		Limit(limit).
+		Find(&rows).Error
+	return rows, err
+}
+
+func (r *MySQLRepository) ListSupportTargetRows(userID int, currentDate time.Time) ([]SupportTargetRow, error) {
+	var rows []SupportTargetRow
+	err := r.db.Table("follows AS f").
+		Select(`
+			p.user_id,
+			p.username,
+			p.training_frequency_days,
+			latest.last_trained_on
+		`).
+		Joins("JOIN profiles AS p ON p.user_id = f.followee_user_id AND p.deleted_at IS NULL").
+		Joins("JOIN users AS u ON u.id = p.user_id AND u.deleted_at IS NULL").
+		Joins(`
+			JOIN (
+				SELECT user_id, MAX(trained_on) AS last_trained_on
+				FROM training_posts
+				WHERE deleted_at IS NULL AND did_train = TRUE
+				GROUP BY user_id
+			) AS latest ON latest.user_id = f.followee_user_id
+		`).
+		Where("f.follower_user_id = ?", userID).
+		Where("DATEDIFF(?, latest.last_trained_on) > p.training_frequency_days", dateOnly(currentDate)).
+		Order("latest.last_trained_on ASC, p.user_id ASC").
+		Find(&rows).Error
+	return rows, err
+}
+
+func (r *MySQLRepository) CreateSupportWithNotification(support *model.SupportMessage, notification *model.Notification) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := ensureUserExists(tx, support.ReceiverUserID); err != nil {
+			return err
+		}
+		if err := tx.Create(support).Error; err != nil {
+			return err
+		}
+		notification.SupportMessageID = &support.ID
+		if err := tx.Create(notification).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+func (r *MySQLRepository) ListNotificationRows(input NotificationQuery) ([]NotificationRow, error) {
+	query := r.db.Table("notifications AS n").
+		Select(`
+			n.id,
+			n.notification_type,
+			n.body,
+			n.training_post_id,
+			n.support_message_id,
+			n.is_read,
+			n.created_at
+		`).
+		Where("n.user_id = ?", input.UserID)
+
+	if input.UnreadOnly {
+		query = query.Where("n.is_read = FALSE")
+	}
+	if input.CursorTime != nil && input.CursorID != nil {
+		query = query.Where("(n.created_at < ? OR (n.created_at = ? AND n.id < ?))", input.CursorTime, input.CursorTime, *input.CursorID)
+	}
+
+	var rows []NotificationRow
+	err := query.
+		Order("n.created_at DESC, n.id DESC").
+		Limit(input.Limit).
+		Find(&rows).Error
+	return rows, err
+}
+
+func (r *MySQLRepository) MarkNotificationRead(userID int, notificationID int, readAt time.Time) (*model.Notification, error) {
+	var notification model.Notification
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("id = ? AND user_id = ?", notificationID, userID).First(&notification).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrNotificationNotFound
+			}
+			return err
+		}
+		notification.IsRead = true
+		notification.ReadAt = &readAt
+		return tx.Save(&notification).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &notification, nil
+}
+
+func ensureUserExists(db *gorm.DB, userID int) error {
+	var user model.User
+	err := db.Select("id").Where("id = ? AND deleted_at IS NULL", userID).First(&user).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrUserNotFound
+		}
+		return err
+	}
+	return nil
+}
+
+func ensureTrainingPostExists(db *gorm.DB, postID int) error {
+	var post model.TrainingPost
+	err := db.Select("id").Where("id = ? AND deleted_at IS NULL", postID).First(&post).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrTrainingPostNotFound
+		}
+		return err
+	}
+	return nil
+}
+
+func markRecommendationSlotFollowed(db *gorm.DB, userID int, recommendedUserID int) error {
+	return db.Model(&model.RecommendationSlot{}).
+		Where("user_id = ? AND recommended_user_id = ? AND status = 1", userID, recommendedUserID).
+		Update("status", 2).Error
+}
+
+func markRecommendationSlotActive(db *gorm.DB, userID int, recommendedUserID int) error {
+	return db.Model(&model.RecommendationSlot{}).
+		Where("user_id = ? AND recommended_user_id = ? AND status = 2", userID, recommendedUserID).
+		Update("status", 1).Error
+}
+
 func (r *MySQLRepository) ListTimelinePosts(input TimelineQuery) ([]TimelinePostRow, error) {
 	query := r.timelinePostBaseQuery(input.UserID).
 		Where("tp.user_id <> ?", input.UserID)
@@ -305,8 +738,13 @@ func (r *MySQLRepository) ListTimelinePosts(input TimelineQuery) ([]TimelinePost
 			Joins("JOIN follows AS f ON f.followee_user_id = tp.user_id AND f.follower_user_id = ?", input.UserID).
 			Where("tp.visibility IN ?", []string{"followers", "followers_and_recommended"})
 	case "recommended":
+		recommendedSlots := r.db.Table("recommendation_slots AS rs").
+			Select("rs.recommended_user_id").
+			Where("rs.user_id = ? AND rs.slot_date = ? AND rs.status IN ?", input.UserID, dateOnly(input.CurrentDate), []int{1, 2}).
+			Order("rs.display_order ASC, rs.id ASC").
+			Limit(5)
 		query = query.
-			Joins("JOIN recommendation_slots AS rs ON rs.recommended_user_id = tp.user_id AND rs.user_id = ? AND rs.slot_date = ? AND rs.status = 1", input.UserID, dateOnly(input.CurrentDate)).
+			Joins("JOIN (?) AS rec ON rec.recommended_user_id = tp.user_id", recommendedSlots).
 			Where("tp.visibility IN ?", []string{"recommended", "followers_and_recommended"})
 	default:
 		return nil, errors.New("invalid timeline source")

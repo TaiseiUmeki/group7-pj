@@ -5,7 +5,7 @@ import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import styles from "../page.module.css";
 import { availableTags, exercisesByBodyPart } from "../constants/workout";
-import type { BodyPart, Connection, DetailedWorkoutInput, Profile, ProfileTag, TimelinePost, TimelineTab, WorkoutSession } from "../types/workout";
+import type { BodyPart, Connection, DetailedWorkoutInput, Profile, ProfileTag, SupportTarget, TimelinePost, TimelineTab, WorkoutSession } from "../types/workout";
 import { formatStopwatch, getDaysWithoutPost, getLocalDateTimeInputValue, getWorkoutElapsed } from "../utils/workout";
 import { ArrowIcon, ChevronIcon, HeartIcon, PauseIcon, PlayIcon, PlusIcon, StopIcon, UserIcon } from "./icons";
 
@@ -28,7 +28,16 @@ export function TimelineScreen({
   timelinePosts,
   loadingTimeline,
   timelineError,
+  recommendedUsers,
+  loadingRecommendations,
+  recommendationsError,
+  followingRecommendationIDs,
+  onFollowRecommendation,
   onCreateRecord,
+  supportTargets,
+  supportTargetsError,
+  onDismissSupportTarget,
+  onSupportTarget,
 }: {
   activeTab: TimelineTab;
   onSelectTab: (tab: TimelineTab) => void;
@@ -39,9 +48,24 @@ export function TimelineScreen({
   timelinePosts: TimelinePost[];
   loadingTimeline: boolean;
   timelineError: string;
+  recommendedUsers: Profile[];
+  loadingRecommendations: boolean;
+  recommendationsError: string;
+  followingRecommendationIDs: number[];
+  onFollowRecommendation: (profile: Profile) => void;
   onCreateRecord: () => void;
+  supportTargets: SupportTarget[];
+  supportTargetsError: string;
+  onDismissSupportTarget: (target: SupportTarget) => void;
+  onSupportTarget: (target: SupportTarget) => void;
 }) {
   const posts = timelinePosts;
+  const supportTarget = supportTargets[0];
+  const todayLabel = new Intl.DateTimeFormat("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 
   return (
     <>
@@ -62,6 +86,93 @@ export function TimelineScreen({
         </button>
       </header>
       <section className={styles.timeline} aria-label="投稿一覧">
+        {supportTarget ? (
+          <section className={styles.supportPanel} aria-labelledby="support-title">
+            <div className={styles.supportHeader}>
+              <span className={`${styles.avatar} ${styles[toneForSupportTarget(supportTarget.user.id)]}`}>
+                <UserIcon />
+              </span>
+              <div>
+                <h2 id="support-title">応援できるフォロー先</h2>
+                <strong>{supportTarget.user.username}</strong>
+              </div>
+            </div>
+            <dl className={styles.supportStats}>
+              <div>
+                <dt>最後のトレーニング</dt>
+                <dd>{supportTarget.lastTrainedOn}</dd>
+              </div>
+              <div>
+                <dt>未実施日数</dt>
+                <dd>{supportTarget.daysWithoutTraining}日</dd>
+              </div>
+              <div>
+                <dt>設定頻度</dt>
+                <dd>{supportTarget.trainingFrequencyDays}日ごと</dd>
+              </div>
+            </dl>
+            {supportTargetsError ? <p className={styles.supportError}>{supportTargetsError}</p> : null}
+            <div className={styles.supportActions}>
+              <button type="button" onClick={() => onDismissSupportTarget(supportTarget)}>
+                あとで
+              </button>
+              <button type="button" onClick={() => onSupportTarget(supportTarget)}>
+                がんばれ
+              </button>
+            </div>
+          </section>
+        ) : null}
+        {activeTab === "recommended" ? (
+          <section className={styles.recommendationPanel} aria-label="おすすめユーザー">
+            <div className={styles.recommendationHeader}>
+              <h2>おすすめユーザー</h2>
+              <span>今日の5人・{todayLabel}</span>
+            </div>
+            {recommendationsError ? <p className={styles.emptyState}>{recommendationsError}</p> : null}
+            {loadingRecommendations ? <p className={styles.emptyState}>おすすめユーザーを読み込んでいます...</p> : null}
+            {!loadingRecommendations && recommendedUsers.length === 0 && !recommendationsError ? (
+              <p className={styles.emptyState}>表示できるおすすめユーザーはまだありません。</p>
+            ) : null}
+            {recommendedUsers.length > 0 ? (
+              <div className={styles.recommendationList}>
+                {recommendedUsers.map((profile) => {
+                  const updating = Boolean(profile.userId && followingRecommendationIDs.includes(profile.userId));
+                  return (
+                    <article className={styles.recommendationItem} key={profile.userId ?? profile.handle}>
+                      <button
+                        className={`${styles.avatar} ${styles[profile.tone]}`}
+                        aria-label={`${profile.name}のプロフィールを見る`}
+                        onClick={() => onOpenProfile(profile)}
+                        type="button"
+                      >
+                        <UserIcon />
+                      </button>
+                      <div className={styles.recommendationBody}>
+                        <button className={styles.author} onClick={() => onOpenProfile(profile)} type="button">
+                          {profile.name}
+                        </button>
+                        <span>{profile.handle}</span>
+                        {profile.tags && profile.tags.length > 0 ? (
+                          <div className={styles.recommendationTags}>
+                            {profile.tags.map((tag) => <span key={tag}>{tag}</span>)}
+                          </div>
+                        ) : null}
+                      </div>
+                      <button
+                        className={styles.followButton}
+                        disabled={updating}
+                        onClick={() => onFollowRecommendation(profile)}
+                        type="button"
+                      >
+                        {updating ? "更新中" : profile.isFollowing ? "フォロー解除" : "フォロー"}
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
         {timelineError ? <p className={styles.emptyState}>{timelineError}</p> : null}
         {loadingTimeline ? <p className={styles.emptyState}>投稿を読み込んでいます...</p> : null}
         {!loadingTimeline && posts.length === 0 ? <p className={styles.emptyState}>表示できる投稿はまだありません。</p> : null}
@@ -120,6 +231,11 @@ export function TimelineScreen({
       </button>
     </>
   );
+}
+
+function toneForSupportTarget(userID: number): Profile["tone"] {
+  const tones: Profile["tone"][] = ["blue", "green", "purple"];
+  return tones[Math.abs(userID) % tones.length];
 }
 
 export function PostDetailScreen({
@@ -201,6 +317,10 @@ export function ProfileScreen({
   recordErrorMessage,
   onUpdate,
   onSignout,
+  onFollowToggle,
+  onOpenConnection,
+  onOpenLog,
+  followUpdating = false,
 }: {
   profile: Profile;
   own?: boolean;
@@ -208,6 +328,10 @@ export function ProfileScreen({
   recordErrorMessage?: string;
   onUpdate?: (profile: Profile) => void;
   onSignout?: () => void;
+  onFollowToggle?: () => void;
+  onOpenConnection?: (connection: Connection) => void;
+  onOpenLog?: (postId: number) => void;
+  followUpdating?: boolean;
 }) {
   const [panel, setPanel] = useState<"summary" | "edit" | "following" | "followers">("summary");
   const [inactiveDays, setInactiveDays] = useState<number | null>(null);
@@ -241,6 +365,7 @@ export function ProfileScreen({
         people={people}
         title={panel === "following" ? "フォロー" : "フォロワー"}
         onBack={() => setPanel("summary")}
+        onOpenConnection={onOpenConnection}
       />
     );
   }
@@ -258,6 +383,10 @@ export function ProfileScreen({
         <h1>プロフィール</h1>
         {own ? (
           <button className={styles.edit} onClick={() => setPanel("edit")} type="button">編集</button>
+        ) : onFollowToggle ? (
+          <button className={styles.edit} disabled={followUpdating} onClick={onFollowToggle} type="button">
+            {followUpdating ? "更新中" : profile.isFollowing ? "フォロー解除" : "フォロー"}
+          </button>
         ) : (
           <span className={styles.headerSpacer} />
         )}
@@ -327,13 +456,30 @@ export function ProfileScreen({
         {recordErrorMessage ? <p className={styles.profileNotice}>{recordErrorMessage}</p> : null}
         <div className={styles.logs}>
           {profile.logs.length > 0 ? (
-            profile.logs.map((log) => (
-              <article className={styles.log} key={log.id}>
-                <time>{log.date}</time>
-                <strong>{log.exercise}</strong>
-                <p>{log.detail}</p>
-              </article>
-            ))
+            profile.logs.map((log) => {
+              const content = (
+                <>
+                  <time>{log.date}</time>
+                  <strong>{log.exercise}</strong>
+                  <p>{log.detail}</p>
+                </>
+              );
+
+              return log.postId && onOpenLog ? (
+                <button
+                  className={styles.log}
+                  key={log.id}
+                  onClick={() => onOpenLog(log.postId!)}
+                  type="button"
+                >
+                  {content}
+                </button>
+              ) : (
+                <article className={styles.log} key={log.id}>
+                  {content}
+                </article>
+              );
+            })
           ) : (
             <p className={styles.emptyState}>まだトレーニング記録がありません。</p>
           )}
@@ -443,10 +589,12 @@ export function ConnectionsScreen({
   people,
   title,
   onBack,
+  onOpenConnection,
 }: {
   people: Connection[];
   title: string;
   onBack: () => void;
+  onOpenConnection?: (connection: Connection) => void;
 }) {
   return (
     <section className={styles.profileScreen}>
@@ -461,9 +609,15 @@ export function ConnectionsScreen({
         <p className={styles.connectionCount}>{people.length}人</p>
         {people.map((person) => (
           <article className={styles.connection} key={person.handle}>
-            <div className={`${styles.avatar} ${styles[person.tone]}`}>
+            <button
+              className={`${styles.avatar} ${styles[person.tone]}`}
+              disabled={!person.userId || !onOpenConnection}
+              onClick={() => onOpenConnection?.(person)}
+              type="button"
+              aria-label={`${person.name}のプロフィールを見る`}
+            >
               <UserIcon />
-            </div>
+            </button>
             <div>
               <strong>{person.name}</strong>
               <span>{person.handle}</span>
@@ -533,7 +687,7 @@ export function QuickStartScreen({
         </button>
       </div>
       {errorMessage ? <p className={styles.workoutError} role="alert">{errorMessage}</p> : null}
-      <p className={styles.finishNote}>終了すると計測結果を投稿し、タイムラインへ戻ります。</p>
+      <p className={styles.finishNote}>終了すると計測結果を使って投稿内容を編集できます。</p>
     </section>
   );
 }
@@ -543,16 +697,20 @@ export function CreateRecordScreen({
   posting,
   onBack,
   onSubmit,
+  initialStartTime,
+  initialDurationMinutes,
 }: {
   errorMessage: string;
   posting: boolean;
   onBack: () => void;
   onSubmit: (input: DetailedWorkoutInput) => void;
+  initialStartTime?: string;
+  initialDurationMinutes?: number;
 }) {
   const [bodyPart, setBodyPart] = useState<BodyPart | "">("");
   const [exercise, setExercise] = useState("");
-  const [startTime, setStartTime] = useState(getLocalDateTimeInputValue);
-  const [durationMinutes, setDurationMinutes] = useState("45");
+  const [startTime, setStartTime] = useState(initialStartTime ?? getLocalDateTimeInputValue);
+  const [durationMinutes, setDurationMinutes] = useState(String(initialDurationMinutes ?? 45));
   const [note, setNote] = useState("");
 
   // 部位の選択に応じて、種目の選択肢を絞り込む。
