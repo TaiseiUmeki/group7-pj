@@ -1827,14 +1827,29 @@ html[data-theme="dark"] .themeToggleButton { background: #000; color: #fff; box-
 html[data-theme="dark"] .recommendationPanel,
 html[data-theme="dark"] .post,
 html[data-theme="dark"] .detailCard,
-html[data-theme="dark"] .supportPanel,
-html[data-theme="dark"] .recommendationItem {
-  background: #000;
+html[data-theme="dark"] .recommendationItem ,
+html[data-theme="dark"] .badgeCard,
+html[data-theme="dark"] .stats,
+html[data-theme="dark"] .inactiveStatus{
+  background: #222222;
   color: #fff;
   border-color: rgba(255,255,255,0.03);
 }
 
-/* ThemeToggle: show moon in light, show sun in dark using CSS only to avoid SSR mismatch */
+html[data-theme="dark"] .supportPanel,
+html[data-theme="dark"] .supportItem{
+  background: rgb(41, 41, 41);
+  color: #fff;
+  border-color: rgba(80, 18, 18, 0.03);
+}
+
+html[data-theme="dark"] .supportPanel div {
+  background: rgb(41, 41, 41);
+  color: #fff;
+}
+
+
+/* ThemeToggle: rgba(117, 126, 255, 0.03)ow sun in dark using CSS only to avoid SSR mismatch */
 .themeToggleButton .sunRays,
 .themeToggleButton .sunCore {
   display: none;
@@ -2048,13 +2063,6 @@ html[data-theme="dark"] .themeToggleButton .moon {
   .workoutError {
     background: rgba(189, 53, 45, 0.18);
     color: #ff8b86;
-  }
-
-  .liked,
-  .detailLikeButton.liked {
-    background: rgba(227, 68, 102, 0.16);
-    border-color: rgba(227, 68, 102, 0.35);
-    color: #e34466;
   }
 
   .followButton,
