@@ -38,6 +38,7 @@ export type Profile = {
   tone: Tone;
   records: string;
   streak: string;
+  streakDays?: number;
   achievements: string;
   logs: TrainingLog[];
   badges?: Badge[];

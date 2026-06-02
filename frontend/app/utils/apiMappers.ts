@@ -24,6 +24,7 @@ export type TimelineApiItem = {
     username: string;
     bio?: string;
     trainingFrequencyDays?: number;
+    streakDays?: number;
     tags?: Array<{ id: number; label: string }>;
   };
 };
@@ -37,6 +38,10 @@ export type UserProfileApiResponse = {
     bio?: string;
     training_frequency_days?: number;
     trainingFrequencyDays?: number;
+    streak_days?: number;
+    streakDays?: number;
+    last_workout_date?: string;
+    lastWorkoutDate?: string;
     tags?: Array<{ id: number; label: string }>;
     following?: boolean;
   };
@@ -158,7 +163,8 @@ export const mapTimelineItemToPost = (item: TimelineApiItem): TimelinePost => {
       bio: item.author.bio || "プロフィール未設定",
       tone: toneByUserID(item.author.id),
       records: "-",
-      streak: "-",
+      streak: item.author.streakDays ? `${item.author.streakDays}日` : "-",
+      streakDays: item.author.streakDays ?? 0,
       achievements: "-",
       logs: [],
       tags: toProfileTags(item.author.tags),
@@ -177,6 +183,7 @@ export const mapTimelineItemToPost = (item: TimelineApiItem): TimelinePost => {
 
 export const mapApiProfileToProfile = (profile: NonNullable<UserProfileApiResponse["profile"]>): Profile => {
   const userID = profile.userId ?? profile.user_id ?? profile.id;
+  const streakDays = profile.streakDays ?? profile.streak_days ?? 0;
 
   return {
     userId: userID,
@@ -185,7 +192,8 @@ export const mapApiProfileToProfile = (profile: NonNullable<UserProfileApiRespon
     bio: profile.bio || "プロフィール未設定",
     tone: toneByUserID(userID),
     records: "-",
-    streak: "-",
+    streak: streakDays > 0 ? `${streakDays}日` : "-",
+    streakDays,
     achievements: "-",
     logs: [],
     tags: toProfileTags(profile.tags),

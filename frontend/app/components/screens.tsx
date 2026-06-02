@@ -429,8 +429,8 @@ export function TimelineScreen({
                 </button>
                 <time>{post.postedAt}</time>
               </div>
-              <span className={`${styles.trainingStatus} ${post.didTrain ? styles.done : styles.skipped}`}>
-                {post.didTrain ? "トレーニング完了" : "今日は休み"}
+              <span className={`${styles.trainingStatus} ${getTrainingStatusClass(post)}`}>
+                {getTrainingStatusText(post)}
               </span>
               <div className={styles.workoutOverview}>
                 <strong>{post.exercise}</strong>
@@ -542,6 +542,31 @@ function toneForSupportTarget(userID: number): Profile["tone"] {
   return tones[Math.abs(userID) % tones.length];
 }
 
+function getTrainingStatusText(post: TimelinePost) {
+  if (!post.didTrain) {
+    return "今日は休み";
+  }
+  const streakDays = post.author.streakDays ?? 0;
+  return streakDays > 0 ? `連続${streakDays}日✨` : "トレーニング完了";
+}
+
+function getTrainingStatusClass(post: TimelinePost) {
+  if (!post.didTrain) {
+    return styles.skipped;
+  }
+  const streakDays = post.author.streakDays ?? 0;
+  if (streakDays >= 7) {
+    return styles.streakHot;
+  }
+  if (streakDays >= 3) {
+    return styles.streakWarm;
+  }
+  if (streakDays >= 1) {
+    return styles.streakFresh;
+  }
+  return styles.done;
+}
+
 export function PostDetailScreen({
   post,
   liked,
@@ -579,8 +604,8 @@ export function PostDetailScreen({
           </button>
           <time>{post.postedAt}</time>
         </div>
-        <span className={`${styles.trainingStatus} ${post.didTrain ? styles.done : styles.skipped}`}>
-          {post.didTrain ? "トレーニング完了" : "今日は休み"}
+        <span className={`${styles.trainingStatus} ${getTrainingStatusClass(post)}`}>
+          {getTrainingStatusText(post)}
         </span>
         <dl className={styles.detailMetrics}>
           <div>
