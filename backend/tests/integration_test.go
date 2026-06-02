@@ -157,6 +157,35 @@ func (f *fakeRepo) UpdateUser(user *model.User) error {
 	return nil
 }
 
+func (f *fakeRepo) ListWorkoutDatesByUserID(userID int) ([]time.Time, error) {
+	seen := map[string]time.Time{}
+	for _, post := range f.postsByID {
+		if post.UserID != userID || post.DeletedAt != nil || !post.DidTrain {
+			continue
+		}
+		date := testDateOnly(post.TrainedOn)
+		seen[date.Format("2006-01-02")] = date
+	}
+	dates := make([]time.Time, 0, len(seen))
+	for _, date := range seen {
+		dates = append(dates, date)
+	}
+	sort.Slice(dates, func(i, j int) bool {
+		return dates[i].After(dates[j])
+	})
+	return dates, nil
+}
+
+func (f *fakeRepo) UpdateUserWorkoutStreak(userID int, streakDays int, lastWorkoutDate *time.Time) error {
+	user, ok := f.usersByID[userID]
+	if !ok {
+		return repository.ErrUserNotFound
+	}
+	user.StreakDays = streakDays
+	user.LastWorkoutDate = lastWorkoutDate
+	return nil
+}
+
 func (f *fakeRepo) DeleteUser(id int) error {
 	if user, ok := f.usersByID[id]; ok {
 		delete(f.usersByEmail, strings.ToLower(user.Email))
@@ -209,11 +238,35 @@ func (f *fakeRepo) CreateWorkoutRecord(record *model.WorkoutRecord) error {
 		f.nextRecordID++
 	}
 	f.recordsByID[record.ID] = record
+	startedAt := record.StartTime
+	endedAt := record.StartTime.Add(time.Duration(record.DurationMinutes) * time.Minute)
+	duration := record.DurationMinutes
+	post := &model.TrainingPost{
+		ID:              record.ID,
+		UserID:          record.UserID,
+		DidTrain:        true,
+		TrainedOn:       testDateOnly(record.StartTime),
+		StartedAt:       &startedAt,
+		EndedAt:         &endedAt,
+		DurationMinutes: &duration,
+		Visibility:      "followers_and_recommended",
+		CreatedAt:       time.Now(),
+	}
+	f.postsByID[post.ID] = post
 	return nil
 }
 
 func (f *fakeRepo) UpdateWorkoutRecord(record *model.WorkoutRecord) error {
 	f.recordsByID[record.ID] = record
+	if post, ok := f.postsByID[record.ID]; ok {
+		startedAt := record.StartTime
+		endedAt := record.StartTime.Add(time.Duration(record.DurationMinutes) * time.Minute)
+		duration := record.DurationMinutes
+		post.TrainedOn = testDateOnly(record.StartTime)
+		post.StartedAt = &startedAt
+		post.EndedAt = &endedAt
+		post.DurationMinutes = &duration
+	}
 	return nil
 }
 
@@ -279,6 +332,7 @@ func (f *fakeRepo) ListTimelinePosts(input repository.TimelineQuery) ([]reposito
 			AuthorUsername:        profile.Username,
 			AuthorBio:             profile.Bio,
 			TrainingFrequencyDays: profile.TrainingFrequencyDays,
+			AuthorStreakDays:      f.usersByID[profile.UserID].StreakDays,
 			LikeCount:             likeCount,
 			LikedByMe:             likedByMe,
 		})
@@ -313,6 +367,7 @@ func (f *fakeRepo) GetTimelinePostByID(postID int, currentUserID int) (*reposito
 		AuthorUsername:        profile.Username,
 		AuthorBio:             profile.Bio,
 		TrainingFrequencyDays: profile.TrainingFrequencyDays,
+		AuthorStreakDays:      f.usersByID[profile.UserID].StreakDays,
 		LikeCount:             likeCount,
 		LikedByMe:             likedByMe,
 	}, nil
@@ -837,6 +892,32 @@ func TestGetTimelineRejectsInvalidSource(t *testing.T) {
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400, got %d", w.Code)
+	}
+}
+
+func TestRefreshWorkoutStreakIgnoresTodayAndCountsFromYesterday(t *testing.T) {
+	user := &model.User{ID: 1, Email: "user@example.com"}
+	repo := newFakeRepo(user)
+	repo.profilesByID[1] = &model.Profile{ID: 1, UserID: user.ID, Username: "Streak User"}
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	repo.postsByID[1] = &model.TrainingPost{ID: 1, UserID: user.ID, DidTrain: true, TrainedOn: time.Date(2026, 6, 2, 0, 0, 0, 0, time.UTC)}
+	repo.postsByID[2] = &model.TrainingPost{ID: 2, UserID: user.ID, DidTrain: true, TrainedOn: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)}
+	repo.postsByID[3] = &model.TrainingPost{ID: 3, UserID: user.ID, DidTrain: true, TrainedOn: time.Date(2026, 5, 31, 0, 0, 0, 0, time.UTC)}
+	repo.postsByID[4] = &model.TrainingPost{ID: 4, UserID: user.ID, DidTrain: true, TrainedOn: time.Date(2026, 5, 29, 0, 0, 0, 0, time.UTC)}
+
+	svc := service.NewService(repo, "test-secret")
+	streakDays, lastWorkoutDate, err := svc.RefreshWorkoutStreak(user.ID, now)
+	if err != nil {
+		t.Fatalf("expected streak refresh to succeed: %v", err)
+	}
+	if streakDays != 2 {
+		t.Fatalf("expected streak 2, got %d", streakDays)
+	}
+	if lastWorkoutDate == nil || lastWorkoutDate.Format("2006-01-02") != "2026-06-02" {
+		t.Fatalf("expected last workout date to include today, got %v", lastWorkoutDate)
+	}
+	if user.StreakDays != 2 {
+		t.Fatalf("expected cached streak 2, got %d", user.StreakDays)
 	}
 }
 

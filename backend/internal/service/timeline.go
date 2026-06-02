@@ -51,6 +51,7 @@ type TimelineAuthor struct {
 	Username              string           `json:"username"`
 	Bio                   *string          `json:"bio,omitempty"`
 	TrainingFrequencyDays int              `json:"trainingFrequencyDays"`
+	StreakDays            int              `json:"streakDays"`
 	Tags                  []ProfileTagView `json:"tags"`
 }
 
@@ -115,6 +116,11 @@ func (s *Service) GetTimeline(userID int, input TimelineInput) (*TimelineRespons
 		if err != nil {
 			return nil, err
 		}
+		streakDays, _, err := s.RefreshWorkoutStreak(row.AuthorUserID, time.Now())
+		if err != nil {
+			return nil, err
+		}
+		row.AuthorStreakDays = streakDays
 		items = append(items, buildTimelinePostView(row, buildProfileTagViews(tagIDs)))
 	}
 
@@ -142,6 +148,11 @@ func (s *Service) GetTimelinePost(postID int, currentUserID int) (*TimelinePostV
 	if err != nil {
 		return nil, err
 	}
+	streakDays, _, err := s.RefreshWorkoutStreak(row.AuthorUserID, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	row.AuthorStreakDays = streakDays
 	post := buildTimelinePostView(*row, buildProfileTagViews(tagIDs))
 	return &post, nil
 }
@@ -206,6 +217,7 @@ func buildTimelinePostView(row repository.TimelinePostRow, tags []ProfileTagView
 			Username:              row.AuthorUsername,
 			Bio:                   row.AuthorBio,
 			TrainingFrequencyDays: row.TrainingFrequencyDays,
+			StreakDays:            row.AuthorStreakDays,
 			Tags:                  tags,
 		},
 	}

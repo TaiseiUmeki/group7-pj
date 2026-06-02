@@ -30,6 +30,9 @@ func (s *Service) CreateTrainingPost(userID int, input TrainingPostInput) (*mode
 	if err := s.repo.CreateTrainingPost(post); err != nil {
 		return nil, err
 	}
+	if _, _, err := s.RefreshWorkoutStreak(userID, time.Now()); err != nil {
+		return nil, err
+	}
 
 	return post, nil
 }

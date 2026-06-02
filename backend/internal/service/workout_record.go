@@ -49,6 +49,9 @@ func (s *Service) CreateWorkoutRecord(userID int, input WorkoutRecordInput) (*mo
 	if err := s.repo.CreateWorkoutRecord(record); err != nil {
 		return nil, err
 	}
+	if _, _, err := s.RefreshWorkoutStreak(userID, time.Now()); err != nil {
+		return nil, err
+	}
 
 	return record, nil
 }
@@ -71,6 +74,9 @@ func (s *Service) UpdateWorkoutRecord(userID, recordID int, input WorkoutRecordI
 	record.DurationMinutes = updatedRecord.DurationMinutes
 
 	if err := s.repo.UpdateWorkoutRecord(record); err != nil {
+		return nil, err
+	}
+	if _, _, err := s.RefreshWorkoutStreak(userID, time.Now()); err != nil {
 		return nil, err
 	}
 

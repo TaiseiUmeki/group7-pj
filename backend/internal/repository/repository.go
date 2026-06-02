@@ -34,6 +34,8 @@ type Repository interface {
 	ReplaceProfileTags(profileID int, tagIDs []int) error
 	UpdateProfile(profile *model.Profile) error
 	UpdateUser(user *model.User) error
+	ListWorkoutDatesByUserID(userID int) ([]time.Time, error)
+	UpdateUserWorkoutStreak(userID int, streakDays int, lastWorkoutDate *time.Time) error
 	DeleteUser(id int) error
 
 	// WorkoutRecord関連
@@ -93,6 +95,7 @@ type TimelinePostRow struct {
 	AuthorUsername        string
 	AuthorBio             *string
 	TrainingFrequencyDays int
+	AuthorStreakDays      int
 	LikeCount             int
 	LikedByMe             bool
 }
@@ -260,6 +263,27 @@ func (r *MySQLRepository) UpdateProfile(profile *model.Profile) error {
 // UpdateUser はユーザーを更新します
 func (r *MySQLRepository) UpdateUser(user *model.User) error {
 	return r.db.Save(user).Error
+}
+
+// ListWorkoutDatesByUserID returns each workout date once for streak calculation.
+func (r *MySQLRepository) ListWorkoutDatesByUserID(userID int) ([]time.Time, error) {
+	var dates []time.Time
+	err := r.db.Model(&model.TrainingPost{}).
+		Distinct("trained_on").
+		Where("user_id = ? AND did_train = ? AND deleted_at IS NULL", userID, true).
+		Order("trained_on DESC").
+		Pluck("trained_on", &dates).Error
+	return dates, err
+}
+
+// UpdateUserWorkoutStreak stores the cached streak summary on users.
+func (r *MySQLRepository) UpdateUserWorkoutStreak(userID int, streakDays int, lastWorkoutDate *time.Time) error {
+	return r.db.Model(&model.User{}).
+		Where("id = ?", userID).
+		Updates(map[string]any{
+			"streak_days":       streakDays,
+			"last_workout_date": lastWorkoutDate,
+		}).Error
 }
 
 // DeleteUser はユーザーを削除します
@@ -784,10 +808,12 @@ func (r *MySQLRepository) timelinePostBaseQuery(currentUserID int) *gorm.DB {
 			p.username AS author_username,
 			p.bio AS author_bio,
 			p.training_frequency_days,
+			u.streak_days AS author_streak_days,
 			(SELECT COUNT(*) FROM post_likes AS pl WHERE pl.post_id = tp.id) AS like_count,
 			CASE WHEN my_like.id IS NULL THEN FALSE ELSE TRUE END AS liked_by_me
 		`).
 		Joins("JOIN profiles AS p ON p.user_id = tp.user_id AND p.deleted_at IS NULL").
+		Joins("JOIN users AS u ON u.id = tp.user_id AND u.deleted_at IS NULL").
 		Joins("LEFT JOIN post_likes AS my_like ON my_like.post_id = tp.id AND my_like.user_id = ?", currentUserID).
 		Where("tp.deleted_at IS NULL")
 }

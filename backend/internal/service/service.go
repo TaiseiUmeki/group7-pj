@@ -29,6 +29,8 @@ type ProfileView struct {
 	Username              string           `json:"username"`
 	Bio                   *string          `json:"bio,omitempty"`
 	TrainingFrequencyDays int              `json:"training_frequency_days"`
+	StreakDays            int              `json:"streak_days"`
+	LastWorkoutDate       *string          `json:"last_workout_date,omitempty"`
 	Tags                  []ProfileTagView `json:"tags"`
 	Following             *bool            `json:"following,omitempty"`
 }
@@ -220,6 +222,15 @@ func (s *Service) buildProfileView(profile *model.Profile) (*ProfileView, error)
 	if err != nil {
 		return nil, err
 	}
+	streakDays, lastWorkoutDate, err := s.RefreshWorkoutStreak(profile.UserID, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	var lastWorkoutDateText *string
+	if lastWorkoutDate != nil {
+		value := lastWorkoutDate.Format("2006-01-02")
+		lastWorkoutDateText = &value
+	}
 
 	return &ProfileView{
 		ID:                    profile.ID,
@@ -227,6 +238,8 @@ func (s *Service) buildProfileView(profile *model.Profile) (*ProfileView, error)
 		Username:              profile.Username,
 		Bio:                   profile.Bio,
 		TrainingFrequencyDays: profile.TrainingFrequencyDays,
+		StreakDays:            streakDays,
+		LastWorkoutDate:       lastWorkoutDateText,
 		Tags:                  buildProfileTagViews(tagIDs),
 	}, nil
 }

@@ -4,12 +4,14 @@ import "time"
 
 // User はユーザー認証情報を表します。
 type User struct {
-	ID           int        `json:"id" gorm:"primaryKey;type:bigint;autoIncrement"`
-	Email        string     `json:"email" gorm:"size:255;not null;uniqueIndex:uk_users_email"`
-	PasswordHash string     `json:"-" gorm:"size:255;not null"`
-	CreatedAt    time.Time  `json:"created_at" gorm:"not null;autoCreateTime"`
-	UpdatedAt    time.Time  `json:"updated_at" gorm:"not null;autoUpdateTime"`
-	DeletedAt    *time.Time `json:"deleted_at,omitempty" gorm:"index"`
+	ID              int        `json:"id" gorm:"primaryKey;type:bigint;autoIncrement"`
+	Email           string     `json:"email" gorm:"size:255;not null;uniqueIndex:uk_users_email"`
+	PasswordHash    string     `json:"-" gorm:"size:255;not null"`
+	StreakDays      int        `json:"streak_days" gorm:"not null;default:0"`
+	LastWorkoutDate *time.Time `json:"last_workout_date,omitempty" gorm:"type:date"`
+	CreatedAt       time.Time  `json:"created_at" gorm:"not null;autoCreateTime"`
+	UpdatedAt       time.Time  `json:"updated_at" gorm:"not null;autoUpdateTime"`
+	DeletedAt       *time.Time `json:"deleted_at,omitempty" gorm:"index"`
 }
 
 // Profile はユーザーの表示情報、推薦条件、トレーニング頻度を表します。
