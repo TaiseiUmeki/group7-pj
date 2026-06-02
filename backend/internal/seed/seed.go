@@ -73,6 +73,10 @@ var users = []userSeed{
 		Posts: []postSeed{
 			{DaysAgo: 0, Hour: 18, ExerciseType: 3, DurationMinutes: 70, Note: "スクワット中心。トップセットの感触が良かったです。"},
 			{DaysAgo: 1, Hour: 19, ExerciseType: 2, DurationMinutes: 60, Note: "デッドリフトとローイングを実施。"},
+			{DaysAgo: 2, Hour: 19, ExerciseType: 2, DurationMinutes: 60, Note: "デッドリフトとローイングを実施。"},
+			{DaysAgo: 3, Hour: 19, ExerciseType: 2, DurationMinutes: 60, Note: "デッドリフトとローイングを実施。"},
+			{DaysAgo: 4, Hour: 19, ExerciseType: 2, DurationMinutes: 60, Note: "デッドリフトとローイングを実施。"},
+			{DaysAgo: 5, Hour: 19, ExerciseType: 2, DurationMinutes: 60, Note: "デッドリフトとローイングを実施。"},
 		},
 	},
 	{
