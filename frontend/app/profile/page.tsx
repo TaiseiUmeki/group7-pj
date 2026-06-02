@@ -60,6 +60,8 @@ export default function ProfilePage() {
             username?: string;
             bio?: string;
             training_frequency_days?: number;
+            streak_days?: number;
+            last_workout_date?: string;
             tags?: Array<{ id: number; label: string }>;
           } | null;
         } | null;
@@ -72,11 +74,17 @@ export default function ProfilePage() {
           return;
         }
         if (payload.profile) {
+          const streakDays = payload.profile.streak_days ?? 0;
           setCurrentProfile((profile) => ({
             ...profile,
             name: payload.profile?.username || profile.name,
             bio: payload.profile?.bio || profile.bio,
             inactivityDays: payload.profile?.training_frequency_days ?? profile.inactivityDays,
+            streak: streakDays > 0 ? `${streakDays}日` : "-",
+            streakDays,
+            lastPostedAt: payload.profile?.last_workout_date
+              ? `${payload.profile.last_workout_date}T00:00:00`
+              : profile.lastPostedAt,
             tags: payload.profile?.tags
               ?.map((tag) => tag.label)
               .filter((tag): tag is (typeof availableTags)[number] => availableTags.includes(tag as (typeof availableTags)[number])) ?? profile.tags,
@@ -180,7 +188,7 @@ export default function ProfilePage() {
     ...currentProfile,
     records: loadingWorkoutRecords ? "..." : String(workoutRecords.length),
     logs: workoutRecords.length > 0 ? workoutRecords.map(formatWorkoutLog).slice(0, 3) : [],
-    lastPostedAt: getLatestPostedAt(workoutRecords) ?? currentProfile.lastPostedAt,
+    lastPostedAt: currentProfile.lastPostedAt ?? getLatestPostedAt(workoutRecords),
   };
 
   const handleSignout = () => {

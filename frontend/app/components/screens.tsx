@@ -567,6 +567,40 @@ function getTrainingStatusClass(post: TimelinePost) {
   return styles.done;
 }
 
+function getProfileLogStatusText(profile: Profile, inactiveDays: number | null) {
+  const streakDays = profile.streakDays ?? 0;
+  if (streakDays > 0) {
+    return `連続${streakDays}日✨`;
+  }
+  const daysWithoutTraining = inactiveDays ?? 0;
+  return daysWithoutTraining > 0 ? `${daysWithoutTraining}日未実施` : "トレーニング完了";
+}
+
+function getProfileLogStatusClass(profile: Profile, inactiveDays: number | null) {
+  const streakDays = profile.streakDays ?? 0;
+  if (streakDays >= 7) {
+    return styles.streakHot;
+  }
+  if (streakDays >= 3) {
+    return styles.streakWarm;
+  }
+  if (streakDays >= 1) {
+    return styles.streakFresh;
+  }
+
+  const daysWithoutTraining = inactiveDays ?? 0;
+  if (daysWithoutTraining >= 7) {
+    return styles.inactiveHot;
+  }
+  if (daysWithoutTraining >= 3) {
+    return styles.inactiveWarm;
+  }
+  if (daysWithoutTraining >= 1) {
+    return styles.inactiveFresh;
+  }
+  return styles.done;
+}
+
 export function PostDetailScreen({
   post,
   liked,
@@ -781,6 +815,9 @@ export function ProfileScreen({
         <div className={styles.logHeader}>
           <h3>{own ? "自分のログ" : "トレーニングログ"}</h3>
           <span>最近の記録</span>
+          <span className={`${styles.profileLogStatus} ${getProfileLogStatusClass(profile, inactiveDays)}`}>
+            {getProfileLogStatusText(profile, inactiveDays)}
+          </span>
         </div>
         {recordErrorMessage ? <p className={styles.profileNotice}>{recordErrorMessage}</p> : null}
         <div className={styles.logs}>

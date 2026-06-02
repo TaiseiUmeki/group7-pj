@@ -1136,18 +1136,46 @@
 .logHeader {
   display: flex;
   align-items: baseline;
+  gap: 10px;
   justify-content: space-between;
   margin-bottom: 16px;
 }
 
 .logHeader h3 {
   margin: 0;
+  margin-right: auto;
   font-size: 18px;
 }
 
 .logHeader span {
   color: #7c8799;
   font-size: 12px;
+}
+
+.profileLogStatus {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 5px 10px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.inactiveFresh {
+  color: #b74335;
+  background: #fff0ed;
+}
+
+.inactiveWarm {
+  color: #a72d28;
+  background: #ffe0dc;
+}
+
+.inactiveHot {
+  color: #8b1515;
+  background: #ffc9c4;
 }
 
 .logs {
@@ -2268,6 +2296,21 @@ html[data-theme="dark"] .themeToggleButton .moon {
   .streakHot {
     background: rgba(255, 190, 79, 0.18);
     color: #ffd280;
+  }
+
+  .inactiveFresh {
+    background: rgba(255, 129, 112, 0.14);
+    color: #ff9b8e;
+  }
+
+  .inactiveWarm {
+    background: rgba(239, 82, 74, 0.18);
+    color: #ff827a;
+  }
+
+  .inactiveHot {
+    background: rgba(194, 39, 39, 0.24);
+    color: #ff6868;
   }
 
   .skipped,

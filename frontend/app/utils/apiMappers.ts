@@ -149,6 +149,8 @@ const toProfileTags = (tags?: Array<{ id: number; label: string }>) => (
     .filter((tag): tag is ProfileTag => availableTags.includes(tag as ProfileTag))
 );
 
+const toLocalDateTime = (date?: string) => (date ? `${date}T00:00:00` : undefined);
+
 export const mapTimelineItemToPost = (item: TimelineApiItem): TimelinePost => {
   const exercise = item.exerciseTypeLabel || "トレーニング";
   const duration = item.durationMinutes ? `${item.durationMinutes}分` : "時間未記録";
@@ -198,6 +200,7 @@ export const mapApiProfileToProfile = (profile: NonNullable<UserProfileApiRespon
     logs: [],
     tags: toProfileTags(profile.tags),
     inactivityDays: profile.trainingFrequencyDays ?? profile.training_frequency_days,
+    lastPostedAt: toLocalDateTime(profile.lastWorkoutDate ?? profile.last_workout_date),
     isFollowing: profile.following,
   };
 };
