@@ -20,7 +20,7 @@ export default async function RootLayout({
     const cookieStore = await cookies();
     const t = cookieStore.get("theme");
     serverTheme = t && t.value ? (t.value === "dark" ? "dark" : t.value === "light" ? "light" : null) : null;
-  } catch (e) {
+  } catch {
     // ignore and fall back to client-side script
     serverTheme = null;
   }
@@ -29,7 +29,12 @@ export default async function RootLayout({
   const setThemeScript = `try{const t=localStorage.getItem('theme');if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);}else{const prefers=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.setAttribute('data-theme',prefers?'dark':'light');}}catch(e){};`;
 
   return (
-    <html lang="ja" className="h-full antialiased" {...(serverTheme ? { "data-theme": serverTheme } : {})}>
+    <html
+      lang="ja"
+      className="h-full antialiased"
+      suppressHydrationWarning
+      {...(serverTheme ? { "data-theme": serverTheme } : {})}
+    >
       <head>
         {!serverTheme && <Script id="init-theme" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: setThemeScript }} />}
       </head>

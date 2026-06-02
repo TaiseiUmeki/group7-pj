@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const AUTH_COOKIE_NAME = "group7pj_token";
-const PUBLIC_PATHS = ["/login", "/signup"];
+const AUTH_PATHS = ["/login", "/signup"];
+const PUBLIC_PATHS = [...AUTH_PATHS, "/intro"];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -12,7 +13,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (token && PUBLIC_PATHS.includes(pathname)) {
+  if (token && AUTH_PATHS.includes(pathname)) {
     const homeUrl = new URL("/", request.url);
     return NextResponse.redirect(homeUrl);
   }
