@@ -52,6 +52,7 @@ type TimelineAuthor struct {
 	Bio                   *string          `json:"bio,omitempty"`
 	TrainingFrequencyDays int              `json:"trainingFrequencyDays"`
 	StreakDays            int              `json:"streakDays"`
+	TrainedToday          bool             `json:"trainedToday"`
 	Tags                  []ProfileTagView `json:"tags"`
 }
 
@@ -112,6 +113,7 @@ func (s *Service) GetTimeline(userID int, input TimelineInput) (*TimelineRespons
 
 	items := make([]TimelinePostView, 0, len(rows))
 	streaksByUserID := map[int]int{}
+	trainedTodayByUserID := map[int]bool{}
 	now := time.Now()
 	for _, row := range rows {
 		tagIDs, err := s.repo.GetProfileTagIDs(row.AuthorProfileID)
@@ -119,14 +121,17 @@ func (s *Service) GetTimeline(userID int, input TimelineInput) (*TimelineRespons
 			return nil, err
 		}
 		streakDays, ok := streaksByUserID[row.AuthorUserID]
+		trainedToday := trainedTodayByUserID[row.AuthorUserID]
 		if !ok {
-			streakDays, _, err = s.RefreshWorkoutStreak(row.AuthorUserID, now)
+			streakDays, trainedToday, _, err = s.RefreshWorkoutStreak(row.AuthorUserID, now)
 			if err != nil {
 				return nil, err
 			}
 			streaksByUserID[row.AuthorUserID] = streakDays
+			trainedTodayByUserID[row.AuthorUserID] = trainedToday
 		}
 		row.AuthorStreakDays = streakDays
+		row.AuthorTrainedToday = trainedToday
 		items = append(items, buildTimelinePostView(row, buildProfileTagViews(tagIDs)))
 	}
 
@@ -154,11 +159,12 @@ func (s *Service) GetTimelinePost(postID int, currentUserID int) (*TimelinePostV
 	if err != nil {
 		return nil, err
 	}
-	streakDays, _, err := s.RefreshWorkoutStreak(row.AuthorUserID, time.Now())
+	streakDays, trainedToday, _, err := s.RefreshWorkoutStreak(row.AuthorUserID, time.Now())
 	if err != nil {
 		return nil, err
 	}
 	row.AuthorStreakDays = streakDays
+	row.AuthorTrainedToday = trainedToday
 	post := buildTimelinePostView(*row, buildProfileTagViews(tagIDs))
 	return &post, nil
 }
@@ -224,6 +230,7 @@ func buildTimelinePostView(row repository.TimelinePostRow, tags []ProfileTagView
 			Bio:                   row.AuthorBio,
 			TrainingFrequencyDays: row.TrainingFrequencyDays,
 			StreakDays:            row.AuthorStreakDays,
+			TrainedToday:          row.AuthorTrainedToday,
 			Tags:                  tags,
 		},
 	}

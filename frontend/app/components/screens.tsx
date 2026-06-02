@@ -543,62 +543,57 @@ function toneForSupportTarget(userID: number): Profile["tone"] {
 }
 
 function getTrainingStatusText(post: TimelinePost) {
-  if (!post.didTrain) {
-    return "今日は休み";
-  }
   const streakDays = post.author.streakDays ?? 0;
-  return streakDays > 0 ? `連続${streakDays}日✨` : "トレーニング完了";
+  return `連続${streakDays}日✨`;
 }
 
 function getTrainingStatusClass(post: TimelinePost) {
-  if (!post.didTrain) {
-    return styles.skipped;
-  }
   const streakDays = post.author.streakDays ?? 0;
+  const todayClass = post.author.trainedToday ? ` ${styles.trainedToday}` : "";
   if (streakDays >= 7) {
-    return styles.streakHot;
+    return `${styles.streakHot}${todayClass}`;
   }
   if (streakDays >= 3) {
-    return styles.streakWarm;
+    return `${styles.streakWarm}${todayClass}`;
   }
   if (streakDays >= 1) {
-    return styles.streakFresh;
+    return `${styles.streakFresh}${todayClass}`;
   }
-  return styles.done;
+  return `${styles.done}${todayClass}`;
 }
 
 function getProfileLogStatusText(profile: Profile, inactiveDays: number | null) {
-  const streakDays = profile.streakDays ?? 0;
-  if (streakDays > 0) {
-    return `連続${streakDays}日✨`;
+  if (!profile.trainedToday && inactiveDays && inactiveDays > 0) {
+    return `${inactiveDays}日未実施`;
   }
-  const daysWithoutTraining = inactiveDays ?? 0;
-  return daysWithoutTraining > 0 ? `${daysWithoutTraining}日未実施` : "トレーニング完了";
+  const streakDays = profile.streakDays ?? 0;
+  return `連続${streakDays}日✨`;
 }
 
 function getProfileLogStatusClass(profile: Profile, inactiveDays: number | null) {
   const streakDays = profile.streakDays ?? 0;
+  const todayClass = profile.trainedToday ? ` ${styles.trainedToday}` : "";
   if (streakDays >= 7) {
-    return styles.streakHot;
+    return `${styles.streakHot}${todayClass}`;
   }
   if (streakDays >= 3) {
-    return styles.streakWarm;
+    return `${styles.streakWarm}${todayClass}`;
   }
   if (streakDays >= 1) {
-    return styles.streakFresh;
+    return `${styles.streakFresh}${todayClass}`;
   }
 
   const daysWithoutTraining = inactiveDays ?? 0;
   if (daysWithoutTraining >= 7) {
-    return styles.inactiveHot;
+    return `${styles.inactiveHot}${todayClass}`;
   }
   if (daysWithoutTraining >= 3) {
-    return styles.inactiveWarm;
+    return `${styles.inactiveWarm}${todayClass}`;
   }
   if (daysWithoutTraining >= 1) {
-    return styles.inactiveFresh;
+    return `${styles.inactiveFresh}${todayClass}`;
   }
-  return styles.done;
+  return `${styles.done}${todayClass}`;
 }
 
 export function PostDetailScreen({

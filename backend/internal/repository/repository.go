@@ -96,6 +96,7 @@ type TimelinePostRow struct {
 	AuthorBio             *string
 	TrainingFrequencyDays int
 	AuthorStreakDays      int
+	AuthorTrainedToday    bool
 	LikeCount             int
 	LikedByMe             bool
 }

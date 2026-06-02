@@ -61,6 +61,7 @@ export default function ProfilePage() {
             bio?: string;
             training_frequency_days?: number;
             streak_days?: number;
+            trained_today?: boolean;
             last_workout_date?: string;
             tags?: Array<{ id: number; label: string }>;
           } | null;
@@ -80,8 +81,9 @@ export default function ProfilePage() {
             name: payload.profile?.username || profile.name,
             bio: payload.profile?.bio || profile.bio,
             inactivityDays: payload.profile?.training_frequency_days ?? profile.inactivityDays,
-            streak: streakDays > 0 ? `${streakDays}日` : "-",
+            streak: `${streakDays}日`,
             streakDays,
+            trainedToday: payload.profile?.trained_today ?? false,
             lastPostedAt: payload.profile?.last_workout_date
               ? `${payload.profile.last_workout_date}T00:00:00`
               : profile.lastPostedAt,

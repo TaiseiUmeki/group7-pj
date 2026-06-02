@@ -256,23 +256,37 @@
 }
 
 .done {
+  --today-ring: #36b86e;
+  --today-ring-soft: rgba(54, 184, 110, 0.18);
   color: #247b48;
   background: #e2f7e9;
 }
 
 .streakFresh {
+  --today-ring: #20b66a;
+  --today-ring-soft: rgba(32, 182, 106, 0.2);
   color: #16734a;
   background: #dff8ec;
 }
 
 .streakWarm {
+  --today-ring: #4b8ef7;
+  --today-ring-soft: rgba(75, 142, 247, 0.2);
   color: #2367c8;
   background: #e3efff;
 }
 
 .streakHot {
+  --today-ring: #d99718;
+  --today-ring-soft: rgba(217, 151, 24, 0.22);
   color: #9a5b00;
   background: #fff0c2;
+}
+
+.trainedToday {
+  outline: 2px solid var(--today-ring, currentColor);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 5px var(--today-ring-soft, color-mix(in srgb, currentColor 18%, transparent)), 0 8px 22px var(--today-ring-soft, color-mix(in srgb, currentColor 18%, transparent));
 }
 
 .skipped {
@@ -1164,16 +1178,22 @@
 }
 
 .inactiveFresh {
+  --today-ring: #e06456;
+  --today-ring-soft: rgba(224, 100, 86, 0.18);
   color: #b74335;
   background: #fff0ed;
 }
 
 .inactiveWarm {
+  --today-ring: #d8423b;
+  --today-ring-soft: rgba(216, 66, 59, 0.2);
   color: #a72d28;
   background: #ffe0dc;
 }
 
 .inactiveHot {
+  --today-ring: #c22727;
+  --today-ring-soft: rgba(194, 39, 39, 0.24);
   color: #8b1515;
   background: #ffc9c4;
 }
@@ -2284,31 +2304,48 @@ html[data-theme="dark"] .themeToggleButton .moon {
   .done,
   .running,
   .streakFresh {
+    --today-ring: #44c073;
+    --today-ring-soft: rgba(68, 192, 115, 0.18);
     background: rgba(68, 192, 115, 0.16);
     color: #44c073;
   }
 
   .streakWarm {
+    --today-ring: #7cabff;
+    --today-ring-soft: rgba(124, 171, 255, 0.18);
     background: rgba(86, 154, 255, 0.16);
     color: #7cabff;
   }
 
   .streakHot {
+    --today-ring: #ffd280;
+    --today-ring-soft: rgba(255, 210, 128, 0.2);
     background: rgba(255, 190, 79, 0.18);
     color: #ffd280;
   }
 
+  .trainedToday {
+    outline-color: var(--today-ring, currentColor);
+    box-shadow: 0 0 0 5px var(--today-ring-soft, color-mix(in srgb, currentColor 18%, transparent)), 0 8px 22px var(--today-ring-soft, color-mix(in srgb, currentColor 18%, transparent));
+  }
+
   .inactiveFresh {
+    --today-ring: #ff9b8e;
+    --today-ring-soft: rgba(255, 155, 142, 0.16);
     background: rgba(255, 129, 112, 0.14);
     color: #ff9b8e;
   }
 
   .inactiveWarm {
+    --today-ring: #ff827a;
+    --today-ring-soft: rgba(255, 130, 122, 0.18);
     background: rgba(239, 82, 74, 0.18);
     color: #ff827a;
   }
 
   .inactiveHot {
+    --today-ring: #ff6868;
+    --today-ring-soft: rgba(255, 104, 104, 0.22);
     background: rgba(194, 39, 39, 0.24);
     color: #ff6868;
   }

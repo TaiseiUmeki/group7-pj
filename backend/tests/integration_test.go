@@ -176,6 +176,18 @@ func (f *fakeRepo) ListWorkoutDatesByUserID(userID int) ([]time.Time, error) {
 	return dates, nil
 }
 
+func (f *fakeRepo) hasWorkoutOn(userID int, workoutDate time.Time) bool {
+	for _, post := range f.postsByID {
+		if post.UserID != userID || post.DeletedAt != nil || !post.DidTrain {
+			continue
+		}
+		if testDateOnly(post.TrainedOn).Equal(workoutDate) {
+			return true
+		}
+	}
+	return false
+}
+
 func (f *fakeRepo) UpdateUserWorkoutStreak(userID int, streakDays int, lastWorkoutDate *time.Time) error {
 	user, ok := f.usersByID[userID]
 	if !ok {
@@ -333,6 +345,7 @@ func (f *fakeRepo) ListTimelinePosts(input repository.TimelineQuery) ([]reposito
 			AuthorBio:             profile.Bio,
 			TrainingFrequencyDays: profile.TrainingFrequencyDays,
 			AuthorStreakDays:      f.usersByID[profile.UserID].StreakDays,
+			AuthorTrainedToday:    f.hasWorkoutOn(profile.UserID, testDateOnly(time.Now())),
 			LikeCount:             likeCount,
 			LikedByMe:             likedByMe,
 		})
@@ -368,6 +381,7 @@ func (f *fakeRepo) GetTimelinePostByID(postID int, currentUserID int) (*reposito
 		AuthorBio:             profile.Bio,
 		TrainingFrequencyDays: profile.TrainingFrequencyDays,
 		AuthorStreakDays:      f.usersByID[profile.UserID].StreakDays,
+		AuthorTrainedToday:    f.hasWorkoutOn(profile.UserID, testDateOnly(time.Now())),
 		LikeCount:             likeCount,
 		LikedByMe:             likedByMe,
 	}, nil
@@ -895,7 +909,7 @@ func TestGetTimelineRejectsInvalidSource(t *testing.T) {
 	}
 }
 
-func TestRefreshWorkoutStreakIgnoresTodayAndCountsFromYesterday(t *testing.T) {
+func TestRefreshWorkoutStreakCountsFromTodayWhenTrainedToday(t *testing.T) {
 	user := &model.User{ID: 1, Email: "user@example.com"}
 	repo := newFakeRepo(user)
 	repo.profilesByID[1] = &model.Profile{ID: 1, UserID: user.ID, Username: "Streak User"}
@@ -906,18 +920,42 @@ func TestRefreshWorkoutStreakIgnoresTodayAndCountsFromYesterday(t *testing.T) {
 	repo.postsByID[4] = &model.TrainingPost{ID: 4, UserID: user.ID, DidTrain: true, TrainedOn: time.Date(2026, 5, 29, 0, 0, 0, 0, time.UTC)}
 
 	svc := service.NewService(repo, "test-secret")
-	streakDays, lastWorkoutDate, err := svc.RefreshWorkoutStreak(user.ID, now)
+	streakDays, trainedToday, lastWorkoutDate, err := svc.RefreshWorkoutStreak(user.ID, now)
+	if err != nil {
+		t.Fatalf("expected streak refresh to succeed: %v", err)
+	}
+	if streakDays != 3 {
+		t.Fatalf("expected streak 3, got %d", streakDays)
+	}
+	if !trainedToday {
+		t.Fatal("expected trained today to be true")
+	}
+	if lastWorkoutDate == nil || lastWorkoutDate.Format("2006-01-02") != "2026-06-02" {
+		t.Fatalf("expected last workout date to include today, got %v", lastWorkoutDate)
+	}
+	if user.StreakDays != 3 {
+		t.Fatalf("expected cached streak 3, got %d", user.StreakDays)
+	}
+}
+
+func TestRefreshWorkoutStreakCountsFromYesterdayWhenNotTrainedToday(t *testing.T) {
+	user := &model.User{ID: 1, Email: "user@example.com"}
+	repo := newFakeRepo(user)
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	repo.postsByID[1] = &model.TrainingPost{ID: 1, UserID: user.ID, DidTrain: true, TrainedOn: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)}
+	repo.postsByID[2] = &model.TrainingPost{ID: 2, UserID: user.ID, DidTrain: true, TrainedOn: time.Date(2026, 5, 31, 0, 0, 0, 0, time.UTC)}
+	repo.postsByID[3] = &model.TrainingPost{ID: 3, UserID: user.ID, DidTrain: true, TrainedOn: time.Date(2026, 5, 29, 0, 0, 0, 0, time.UTC)}
+
+	svc := service.NewService(repo, "test-secret")
+	streakDays, trainedToday, _, err := svc.RefreshWorkoutStreak(user.ID, now)
 	if err != nil {
 		t.Fatalf("expected streak refresh to succeed: %v", err)
 	}
 	if streakDays != 2 {
 		t.Fatalf("expected streak 2, got %d", streakDays)
 	}
-	if lastWorkoutDate == nil || lastWorkoutDate.Format("2006-01-02") != "2026-06-02" {
-		t.Fatalf("expected last workout date to include today, got %v", lastWorkoutDate)
-	}
-	if user.StreakDays != 2 {
-		t.Fatalf("expected cached streak 2, got %d", user.StreakDays)
+	if trainedToday {
+		t.Fatal("expected trained today to be false")
 	}
 }
 

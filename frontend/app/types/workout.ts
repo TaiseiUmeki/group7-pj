@@ -39,6 +39,7 @@ export type Profile = {
   records: string;
   streak: string;
   streakDays?: number;
+  trainedToday?: boolean;
   achievements: string;
   logs: TrainingLog[];
   badges?: Badge[];
