@@ -1049,6 +1049,18 @@
   margin-bottom: 34px;
 }
 
+.heatmapSection {
+  margin-bottom: 34px;
+}
+
+.heatmapWrapper {
+  overflow-x: auto;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #e5eaf1;
+  border-radius: 16px;
+}
+
 .badgeGrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -2014,6 +2026,7 @@ html[data-theme="dark"] .post,
 html[data-theme="dark"] .detailCard,
 html[data-theme="dark"] .recommendationItem ,
 html[data-theme="dark"] .badgeCard,
+html[data-theme="dark"] .heatmapWrapper,
 html[data-theme="dark"] .stats,
 html[data-theme="dark"] .inactiveStatus,
 html[data-theme="dark"] .emptyState,
