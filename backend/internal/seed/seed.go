@@ -14,6 +14,11 @@ const (
 	devPassword   = "password123"
 	ownerEmail    = "seed@example.com"
 	ownerUsername = "Demo User"
+
+	supportSenderEmail      = "support-sender@example.com"
+	supportSenderUsername   = "support-sender"
+	supportReceiverEmail    = "support-receiver@example.com"
+	supportReceiverUsername = "support-receiver"
 )
 
 type userSeed struct {
@@ -422,7 +427,42 @@ func Run(db *gorm.DB) error {
 		return err
 	}
 
+	if err := ensureSupportNotificationScenario(db, string(passwordHash)); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func ensureSupportNotificationScenario(db *gorm.DB, passwordHash string) error {
+	sender, err := ensureUser(db, supportSenderEmail, passwordHash)
+	if err != nil {
+		return err
+	}
+	if _, err := ensureDefaultProfile(db, sender.ID, supportSenderUsername, "応援通知の送信確認用ユーザーです。", []int{1, 8}, 3); err != nil {
+		return err
+	}
+
+	receiver, err := ensureUser(db, supportReceiverEmail, passwordHash)
+	if err != nil {
+		return err
+	}
+	if _, err := ensureDefaultProfile(db, receiver.ID, supportReceiverUsername, "応援通知の受信確認用ユーザーです。", []int{3, 8}, 1); err != nil {
+		return err
+	}
+	if err := ensureTrainingPosts(db, receiver.ID, []postSeed{
+		{
+			DaysAgo:         5,
+			Hour:            9,
+			ExerciseType:    6,
+			DurationMinutes: 30,
+			Note:            "応援通知確認用の古いトレーニング記録。",
+			Visibility:      "followers_and_recommended",
+		},
+	}); err != nil {
+		return err
+	}
+	return ensureFollow(db, sender.ID, receiver.ID)
 }
 
 func ensureUser(db *gorm.DB, email string, passwordHash string) (*model.User, error) {
