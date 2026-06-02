@@ -111,14 +111,20 @@ func (s *Service) GetTimeline(userID int, input TimelineInput) (*TimelineRespons
 	}
 
 	items := make([]TimelinePostView, 0, len(rows))
+	streaksByUserID := map[int]int{}
+	now := time.Now()
 	for _, row := range rows {
 		tagIDs, err := s.repo.GetProfileTagIDs(row.AuthorProfileID)
 		if err != nil {
 			return nil, err
 		}
-		streakDays, _, err := s.RefreshWorkoutStreak(row.AuthorUserID, time.Now())
-		if err != nil {
-			return nil, err
+		streakDays, ok := streaksByUserID[row.AuthorUserID]
+		if !ok {
+			streakDays, _, err = s.RefreshWorkoutStreak(row.AuthorUserID, now)
+			if err != nil {
+				return nil, err
+			}
+			streaksByUserID[row.AuthorUserID] = streakDays
 		}
 		row.AuthorStreakDays = streakDays
 		items = append(items, buildTimelinePostView(row, buildProfileTagViews(tagIDs)))
