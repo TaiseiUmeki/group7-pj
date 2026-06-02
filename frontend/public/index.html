@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>IRONLOG</title>
+<title>ゴートレ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+JP:wght@300;400;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
@@ -42,8 +42,27 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--dark);color:va
 .s1 .hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px);background-size:60px 60px;}
 .hero-content{max-width:900px;width:100%;}
 .hero-tag{font-family:var(--font-mono);font-size:12px;letter-spacing:4px;color:var(--orange);margin-bottom:24px;opacity:0;animation:slideUp 0.8s ease 0.2s forwards;}
-.hero-title{font-family:var(--font-display);font-size:clamp(80px,14vw,180px);line-height:0.9;color:var(--white);letter-spacing:2px;opacity:0;animation:slideUp 0.8s ease 0.4s forwards;}
-.hero-title .accent{color:var(--orange);}
+.hero-title {
+  font-family: "Noto Sans JP", "Yu Gothic", "Hiragino Kaku Gothic ProN", sans-serif;
+  font-size: clamp(64px, 12vw, 150px);
+  font-weight: 900;
+  line-height: 0.72;
+  color: var(--white);
+
+  letter-spacing: -0.16em;
+  transform: scaleX(0.78);
+
+  -webkit-text-stroke: 5px var(--white);
+  paint-order: stroke fill;
+
+  opacity: 0;
+  animation: slideUp 0.8s ease 0.4s forwards;
+}
+
+.hero-title .accent {
+  color: var(--orange);
+  -webkit-text-stroke: 5px var(--orange);
+}
 .hero-sub{font-family:var(--font-body);font-size:16px;font-weight:300;color:var(--gray);margin-top:28px;line-height:1.9;max-width:480px;opacity:0;animation:slideUp 0.8s ease 0.6s forwards;}
 .hero-sub em{color:var(--white);font-style:normal;font-weight:400;}
 .hero-en{font-family:var(--font-mono);font-size:11px;letter-spacing:3px;color:rgba(255,255,255,0.2);margin-top:12px;opacity:0;animation:slideUp 0.8s ease 0.8s forwards;}
@@ -198,7 +217,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--dark);color:va
   <div class="hero-bg"></div><div class="hero-grid"></div>
   <div class="slide-inner"><div class="hero-content">
     <p class="hero-tag" data-i18n="s1_tag">WORKOUT TRACKING APP — ラーメンあかつきはいいぞ  2026</p>
-    <h1 class="hero-title">IRON<span class="accent">LOG</span></h1>
+    <h1 class="hero-title">ゴー<span class="accent">トレ</span></h1>
     <p class="hero-sub" data-i18n="s1_sub"><em>動機づけとコミュニティで、</em><br>「今日もやる」を習慣に変える。<br><span style="font-size:13px;color:rgba(255,255,255,0.4)">Keep going. Every rep counts.</span></p>
     <p class="hero-en">MOTIVATION × COMMUNITY × RECORDS</p>
     <div class="hero-cta">
@@ -368,9 +387,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--dark);color:va
   <div class="slide-inner"><div class="cta-content">
     <p class="cta-tag" data-i18n="s7_tag">START YOUR JOURNEY — 今すぐ始めよう</p>
     <h2 class="cta-title" data-i18n="s7_title">今日から<br><span class="orange">継続</span>を変える。</h2>
-    <p class="cta-sub" data-i18n="s7_sub">IRONLOG は、あなたのトレーニングを記録・共有し、<br>コミュニティの力で「続ける習慣」を作ります。<br><span style="font-size:13px;opacity:0.5">Start logging. Stay accountable. Grow together.</span></p>
+    <p class="cta-sub" data-i18n="s7_sub">ゴートレ は、あなたのトレーニングを記録・共有し、<br>コミュニティの力で「続ける習慣」を作ります。<br><span style="font-size:13px;opacity:0.5">Start logging. Stay accountable. Grow together.</span></p>
     <div class="cta-buttons"><a href="/" target="_top" class="btn-cta" data-i18n="s7_cta">今すぐ体験する — START NOW</a></div>
-    <p class="cta-made" data-i18n="s7_made">IRONLOG — ラーメンあかつきはいいぞ  2026 — BUILT WITH NEXT.JS + GIN + MYSQL</p>
+    <p class="cta-made" data-i18n="s7_made">ゴートレ — ラーメンあかつきはいいぞ  2026 — BUILT WITH NEXT.JS + GIN + MYSQL</p>
   </div></div>
 </div>
 
@@ -416,9 +435,9 @@ var i18n = {
     s6_t3: 'MySQL によるスキーマ設計と Docker による環境構築・デプロイパイプラインで、安定した運用基盤を実現しています。',
     s7_tag: 'START YOUR JOURNEY — 今すぐ始めよう',
     s7_title: '今日から<br><span class="orange">継続</span>を変える。',
-    s7_sub: 'IRONLOG は、あなたのトレーニングを記録・共有し、<br>コミュニティの力で「続ける習慣」を作ります。<br><span style="font-size:13px;opacity:0.5">Start logging. Stay accountable. Grow together.</span>',
+    s7_sub: 'ゴートレ は、あなたのトレーニングを記録・共有し、<br>コミュニティの力で「続ける習慣」を作ります。<br><span style="font-size:13px;opacity:0.5">Start logging. Stay accountable. Grow together.</span>',
     s7_cta: '今すぐ体験する — START NOW',
-    s7_made: 'IRONLOG — ラーメンあかつきはいいぞ  2026 — BUILT WITH NEXT.JS + GIN + MYSQL'
+    s7_made: 'ゴートレ — ラーメンあかつきはいいぞ  2026 — BUILT WITH NEXT.JS + GIN + MYSQL'
   },
   en: {
     scroll: 'SCROLL',
@@ -455,9 +474,9 @@ var i18n = {
     s6_t3: 'MySQL schema design paired with Docker-based environment setup and deployment pipelines for a stable production foundation.',
     s7_tag: 'START YOUR JOURNEY',
     s7_title: 'Change your habits,<br><span class="orange">starting today.</span>',
-    s7_sub: 'IRONLOG lets you log and share your workouts,<br>building a lasting habit powered by community.<br><span style="font-size:13px;opacity:0.5">Start logging. Stay accountable. Grow together.</span>',
+    s7_sub: 'ゴートレ lets you log and share your workouts,<br>building a lasting habit powered by community.<br><span style="font-size:13px;opacity:0.5">Start logging. Stay accountable. Grow together.</span>',
     s7_cta: 'START NOW',
-    s7_made: 'IRONLOG — ラーメンあかつきはいいぞ  2026 — BUILT WITH NEXT.JS + GIN + MYSQL'
+    s7_made: 'ゴートレ — ラーメンあかつきはいいぞ  2026 — BUILT WITH NEXT.JS + GIN + MYSQL'
   }
 };
 
