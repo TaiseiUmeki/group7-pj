@@ -101,7 +101,7 @@ export function WeeklyReportCard() {
     `${radarCenter + Math.cos(angle) * radius},${radarCenter + Math.sin(angle) * radius}`
   );
   const radarPolygon = weeklyReport.radarScores.map((item, index) => {
-    const ratio = activePage === 2 && mounted ? item.score / maxRadarScore : 0;
+    const ratio = activePage === 3 && mounted ? item.score / maxRadarScore : 0;
     return radarPoint(radarAngles[index], radarRadius * ratio);
   }).join(" ");
 
@@ -114,6 +114,7 @@ export function WeeklyReportCard() {
   }, []);
 
   const pages = [
+    { title: "出席表", label: "一週間の記録" },
     { title: "サマリー", label: "合計時間 / ランク" },
     { title: "日別時間", label: "7日間の長條図" },
     { title: "部位別", label: "訓練スコア" },
@@ -187,6 +188,37 @@ export function WeeklyReportCard() {
 
       <div className={styles.weeklyPageFrame}>
         <div className={styles.weeklyPageTrack} style={{ transform: `translateY(-${activePage * 100}%)` }}>
+          <section className={`${styles.weeklyPage} ${styles.weeklyAttendancePage}`}>
+            <div className={styles.weeklyPanelHeader}>
+              <div>
+                <h3>一週出席表</h3>
+                <p>記録がある日に、順番にスタンプを押していきます。</p>
+              </div>
+            </div>
+
+            <div className={styles.weeklyAttendanceGrid}>
+              {weeklyReport.dailyTrainingMinutes.map((item, index) => {
+                const attended = item.minutes > 0;
+
+                return (
+                  <div className={styles.weeklyAttendanceDay} key={item.day}>
+                    <span>{item.label}</span>
+                    {attended ? (
+                      <i
+                        className={activePage === 0 && mounted ? styles.weeklyAttendanceStampIn : ""}
+                        style={{ animationDelay: `${index * 170}ms` }}
+                      >
+                        出席
+                      </i>
+                    ) : (
+                      <em>休</em>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
           <section className={`${styles.weeklyPage} ${styles.weeklySummaryPage}`}>
             <div className={styles.weeklyMainStat}>
               <span>合計訓練時間</span>
@@ -202,7 +234,7 @@ export function WeeklyReportCard() {
                 <strong>
                   第 <CountUp value={weeklyReport.friendRank} duration={700} /> 位
                 </strong>
-                <small>{pages[0].label}</small>
+                <small>{pages[1].label}</small>
               </div>
 
               <div className={styles.weeklySmallStat}>
@@ -226,7 +258,7 @@ export function WeeklyReportCard() {
 
             <div className={styles.weeklyHorizontalBars}>
               {weeklyReport.dailyTrainingMinutes.map((item, index) => {
-                const width = activePage === 1 && mounted
+                const width = activePage === 2 && mounted
                   ? `${Math.max(8, (item.minutes / maxDailyMinutes) * 100)}%`
                   : "0%";
 
@@ -280,8 +312,8 @@ export function WeeklyReportCard() {
                   <g key={item.area}>
                     <circle
                       className={styles.weeklyRadarPoint}
-                      cx={radarCenter + Math.cos(radarAngles[index]) * radarRadius * (activePage === 2 && mounted ? item.score / maxRadarScore : 0)}
-                      cy={radarCenter + Math.sin(radarAngles[index]) * radarRadius * (activePage === 2 && mounted ? item.score / maxRadarScore : 0)}
+                      cx={radarCenter + Math.cos(radarAngles[index]) * radarRadius * (activePage === 3 && mounted ? item.score / maxRadarScore : 0)}
+                      cy={radarCenter + Math.sin(radarAngles[index]) * radarRadius * (activePage === 3 && mounted ? item.score / maxRadarScore : 0)}
                       r="3.5"
                     />
                     <text
