@@ -48,6 +48,23 @@
   padding: 28px clamp(18px, 3vw, 32px);
 }
 
+.tourStartButton {
+  position: fixed;
+  top: 92px;
+  right: clamp(18px, 4vw, 34px);
+  z-index: 8;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid #cbd9f6;
+  border-radius: 20px;
+  background: #fff;
+  color: #316cf0;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(22, 34, 54, 0.1);
+}
+
 .recommendationPanel {
   display: grid;
   gap: 14px;
@@ -459,6 +476,134 @@
   stroke: currentColor;
   stroke-width: 2.2;
   stroke-linecap: round;
+}
+
+.tourOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(12, 19, 32, 0.62);
+}
+
+.tourOverlaySegment {
+  position: fixed;
+  z-index: 30;
+  background: rgba(12, 19, 32, 0.62);
+}
+
+.tourSpot {
+  position: fixed;
+  z-index: 32;
+  pointer-events: none;
+  border-radius: 18px;
+  transform: scale(1.02);
+  transition: left 420ms ease, top 420ms ease, width 420ms ease, height 420ms ease, transform 420ms ease;
+  box-shadow:
+    0 0 0 9999px rgba(12, 19, 32, 0.08),
+    0 0 0 6px rgba(255, 217, 102, 0.18),
+    0 0 26px 8px rgba(255, 217, 102, 0.7),
+    0 0 54px 15px rgba(49, 108, 240, 0.22);
+}
+
+.tourSpot::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(circle at center, rgba(255, 245, 183, 0.36), rgba(255, 217, 102, 0.16) 42%, transparent 72%);
+  filter: blur(6px);
+}
+
+.tourTarget {
+  position: relative;
+  z-index: 36;
+  isolation: isolate;
+}
+
+.tourLift {
+  position: relative;
+  z-index: 35;
+  isolation: isolate;
+}
+
+.createRecordButton.tourTarget {
+  position: fixed;
+  z-index: 36;
+}
+
+.detailButton.tourTarget,
+.likeButton.tourTarget {
+  z-index: 37;
+  background: #fff;
+}
+
+.tourDialog {
+  position: fixed;
+  left: 50%;
+  bottom: 112px;
+  z-index: 40;
+  width: min(calc(100% - 36px), 440px);
+  transform: translateX(-50%);
+  padding: 20px;
+  border: 1px solid #d9e2ef;
+  border-radius: 8px;
+  background: #fff;
+  color: #172235;
+  box-shadow: 0 18px 50px rgba(7, 14, 26, 0.28);
+}
+
+.tourProgress {
+  margin: 0 0 10px;
+  color: #316cf0;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tourDialog h2 {
+  display: grid;
+  gap: 3px;
+  margin: 0 0 12px;
+  font-size: 20px;
+}
+
+.tourDialog h2 span:last-child {
+  color: #4f5f75;
+  font-size: 15px;
+}
+
+.tourDialog p {
+  margin: 0 0 8px;
+  color: #4e5b6f;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.tourActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.tourActions button {
+  min-height: 40px;
+  padding: 0 15px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.tourActions button:first-child {
+  border: 1px solid #d9e0eb;
+  background: #fff;
+  color: #4b5a70;
+}
+
+.tourActions button:last-child {
+  background: #316cf0;
+  color: #fff;
 }
 
 .supportPanel {
@@ -1621,6 +1766,14 @@ button.log:hover {
     padding-top: 18px;
   }
 
+  .tourStartButton {
+    top: 74px;
+    right: 16px;
+    min-height: 38px;
+    padding: 0 13px;
+    font-size: 12px;
+  }
+
   .createRecordButton {
     right: 16px;
     bottom: 96px;
@@ -1793,6 +1946,20 @@ button.log:hover {
   .help {
     display: none;
   }
+
+  .tourDialog {
+    bottom: 88px;
+    padding: 17px;
+  }
+
+  .tourDialog h2 {
+    font-size: 18px;
+  }
+
+  .tourActions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 /* dark theme overrides for main components */
@@ -1816,6 +1983,24 @@ html[data-theme="dark"] .themeToggleButton { background: var(--surface-soft); co
 
 html[data-theme="dark"] .author, html[data-theme="dark"] .postContent { color: var(--foreground); }
 html[data-theme="dark"] .summary, html[data-theme="dark"] .recommendationBody > span { color: var(--muted); }
+
+html[data-theme="dark"] .tourStartButton,
+html[data-theme="dark"] .tourDialog,
+html[data-theme="dark"] .tourActions button:first-child {
+  background: #222222;
+  color: #fff;
+  border-color: rgba(255,255,255,0.08);
+}
+
+html[data-theme="dark"] .tourDialog h2 span:last-child,
+html[data-theme="dark"] .tourDialog p {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .detailButton.tourTarget,
+html[data-theme="dark"] .likeButton.tourTarget {
+  background: #222222;
+}
 
 /* make navigation, tabs and floating controls fully black */
 html[data-theme="dark"] .tabs { background: #000; }
