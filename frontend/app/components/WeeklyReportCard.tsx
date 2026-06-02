@@ -1,5 +1,6 @@
 "use client";
 
+import type { TouchEvent, WheelEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import styles from "../page.module.css";
 
@@ -69,7 +70,8 @@ function CountUp({
 
 export function WeeklyReportCard() {
   const [mounted, setMounted] = useState(false);
-  const [activeDay, setActiveDay] = useState(weeklyReport.dailyTrainingMinutes[0]);
+  const [activePage, setActivePage] = useState(0);
+  const [touchStartY, setTouchStartY] = useState<number | null>(null);
 
   const maxDailyMinutes = Math.max(
     ...weeklyReport.dailyTrainingMinutes.map((item) => item.minutes)
@@ -89,6 +91,20 @@ export function WeeklyReportCard() {
     );
   }, []);
 
+  const radarLevels = [0.25, 0.5, 0.75, 1];
+  const radarCenter = 100;
+  const radarRadius = 70;
+  const radarAngles = weeklyReport.radarScores.map((_, index) => (
+    -Math.PI / 2 + (index * 2 * Math.PI) / weeklyReport.radarScores.length
+  ));
+  const radarPoint = (angle: number, radius: number) => (
+    `${radarCenter + Math.cos(angle) * radius},${radarCenter + Math.sin(angle) * radius}`
+  );
+  const radarPolygon = weeklyReport.radarScores.map((item, index) => {
+    const ratio = activePage === 2 && mounted ? item.score / maxRadarScore : 0;
+    return radarPoint(radarAngles[index], radarRadius * ratio);
+  }).join(" ");
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setMounted(true);
@@ -97,8 +113,44 @@ export function WeeklyReportCard() {
     return () => clearTimeout(timer);
   }, []);
 
+  const pages = [
+    { title: "サマリー", label: "合計時間 / ランク" },
+    { title: "日別時間", label: "7日間の長條図" },
+    { title: "部位別", label: "訓練スコア" },
+    { title: "開始時間", label: "タイムライン" },
+  ];
+
+  const movePage = (direction: 1 | -1) => {
+    setActivePage((page) => Math.min(pages.length - 1, Math.max(0, page + direction)));
+  };
+
+  const handleWheel = (event: WheelEvent<HTMLElement>) => {
+    if (Math.abs(event.deltaY) < 24) {
+      return;
+    }
+    event.preventDefault();
+    movePage(event.deltaY > 0 ? 1 : -1);
+  };
+
+  const handleTouchEnd = (event: TouchEvent<HTMLElement>) => {
+    if (touchStartY === null) {
+      return;
+    }
+    const deltaY = touchStartY - event.changedTouches[0].clientY;
+    setTouchStartY(null);
+    if (Math.abs(deltaY) < 42) {
+      return;
+    }
+    movePage(deltaY > 0 ? 1 : -1);
+  };
+
   return (
-    <article className={styles.weeklyReportCard}>
+    <article
+      className={styles.weeklyReportCard}
+      onTouchEnd={handleTouchEnd}
+      onTouchStart={(event) => setTouchStartY(event.touches[0].clientY)}
+      onWheel={handleWheel}
+    >
       <div className={styles.weeklyGlow} />
 
       <header className={styles.weeklyReportHero}>
@@ -118,141 +170,198 @@ export function WeeklyReportCard() {
         </div>
       </header>
 
-      <section className={styles.weeklyStatsGrid}>
-        <div className={styles.weeklyMainStat}>
-          <span>合計訓練時間</span>
-          <strong>
-            <CountUp value={weeklyReport.totalTrainingMinutes} /> 分
-          </strong>
-          <small>先週 7 日間の合計</small>
-        </div>
+      <nav className={styles.weeklyPager} aria-label="週報ページ">
+        {pages.map((page, index) => (
+          <button
+            aria-current={activePage === index ? "page" : undefined}
+            className={activePage === index ? styles.weeklyPagerActive : ""}
+            key={page.title}
+            onClick={() => setActivePage(index)}
+            type="button"
+          >
+            <strong>{index + 1}</strong>
+            <span>{page.title}</span>
+          </button>
+        ))}
+      </nav>
 
-        <div className={styles.weeklySmallStat}>
-          <span>平均時間</span>
-          <strong>
-            <CountUp value={averageMinutes} /> 分
-          </strong>
-          <small>1日あたり</small>
-        </div>
-
-        <div className={styles.weeklySmallStat}>
-          <span>最多訓練日</span>
-          <strong>{bestDay.label}</strong>
-          <small>{bestDay.minutes} 分</small>
-        </div>
-      </section>
-
-      <section className={styles.weeklyPanel}>
-        <div className={styles.weeklyPanelHeader}>
-          <div>
-            <h3>日別トレーニング</h3>
-            <p>クリックすると下の表示が変わります</p>
-          </div>
-          <strong>{activeDay.minutes} 分</strong>
-        </div>
-
-        <div className={styles.weeklyBarChart}>
-          {weeklyReport.dailyTrainingMinutes.map((item, index) => {
-            const height = mounted
-              ? `${Math.max(14, (item.minutes / maxDailyMinutes) * 100)}%`
-              : "0%";
-
-            const isActive = activeDay.day === item.day;
-
-            return (
-              <button
-                key={item.day}
-                type="button"
-                className={`${styles.weeklyBarItem} ${
-                  isActive ? styles.weeklyBarItemActive : ""
-                }`}
-                onClick={() => setActiveDay(item)}
-              >
-                <div className={styles.weeklyBarColumn}>
-                  <i
-                    style={{
-                      height,
-                      transitionDelay: `${index * 80}ms`,
-                    }}
-                  />
-                </div>
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      <div className={styles.weeklyBottomGrid}>
-        <section className={styles.weeklyPanel}>
-          <div className={styles.weeklyPanelHeader}>
-            <div>
-              <h3>部位別バランス</h3>
-              <p>上位五種の訓練区域</p>
+      <div className={styles.weeklyPageFrame}>
+        <div className={styles.weeklyPageTrack} style={{ transform: `translateY(-${activePage * 100}%)` }}>
+          <section className={`${styles.weeklyPage} ${styles.weeklySummaryPage}`}>
+            <div className={styles.weeklyMainStat}>
+              <span>合計訓練時間</span>
+              <strong>
+                <CountUp value={weeklyReport.totalTrainingMinutes} /> 分
+              </strong>
+              <small>先週 7 日間の合計</small>
             </div>
-          </div>
 
-          <div className={styles.weeklyRadarList}>
-            {weeklyReport.radarScores.map((item, index) => (
-              <div className={styles.weeklyRadarRow} key={item.area}>
-                <span>{item.area}</span>
-
-                <div>
-                  <i
-                    style={{
-                      width: mounted
-                        ? `${Math.max(10, (item.score / maxRadarScore) * 100)}%`
-                        : "0%",
-                      transitionDelay: `${index * 90}ms`,
-                    }}
-                  />
-                </div>
-
+            <div className={styles.weeklySummarySide}>
+              <div className={styles.weeklySmallStat}>
+                <span>好友内排名</span>
                 <strong>
-                  <CountUp value={item.score} duration={900} />
+                  第 <CountUp value={weeklyReport.friendRank} duration={700} /> 位
                 </strong>
+                <small>{pages[0].label}</small>
               </div>
-            ))}
-          </div>
-        </section>
 
-        <section className={styles.weeklyPanel}>
-          <div className={styles.weeklyPanelHeader}>
-            <div>
-              <h3>開始時間タイムライン</h3>
-              <p>24時間上の開始位置</p>
+              <div className={styles.weeklySmallStat}>
+                <span>平均時間</span>
+                <strong>
+                  <CountUp value={averageMinutes} /> 分
+                </strong>
+                <small>最多訓練日: {bestDay.label} / {bestDay.minutes}分</small>
+              </div>
             </div>
-          </div>
+          </section>
 
-          <div className={styles.weeklyTimelineScale}>
-            <span>0</span>
-            <span>6</span>
-            <span>12</span>
-            <span>18</span>
-            <span>24</span>
-          </div>
-
-          <div className={styles.weeklyTimelineList}>
-            {weeklyReport.startTimeTimeline.map((item, index) => (
-              <div className={styles.weeklyTimelineRow} key={item.day}>
-                <span>{item.label}</span>
-
-                <div>
-                  <i
-                    style={{
-                      left: mounted ? `${(item.hour / 24) * 100}%` : "0%",
-                      transitionDelay: `${index * 90}ms`,
-                    }}
-                  >
-                    ↓
-                  </i>
-                </div>
-
-                <strong>{item.hour}:00</strong>
+          <section className={styles.weeklyPage}>
+            <div className={styles.weeklyPanelHeader}>
+              <div>
+                <h3>日別トレーニング</h3>
+                <p>曜日ごとの訓練時間を横向きの長條図で表示します。</p>
               </div>
-            ))}
-          </div>
-        </section>
+              <strong>{bestDay.minutes} 分</strong>
+            </div>
+
+            <div className={styles.weeklyHorizontalBars}>
+              {weeklyReport.dailyTrainingMinutes.map((item, index) => {
+                const width = activePage === 1 && mounted
+                  ? `${Math.max(8, (item.minutes / maxDailyMinutes) * 100)}%`
+                  : "0%";
+
+                return (
+                  <div className={styles.weeklyHorizontalBarRow} key={item.day}>
+                    <span>{item.label}</span>
+                    <div>
+                      <i
+                        style={{
+                          width,
+                          transitionDelay: `${index * 80}ms`,
+                        }}
+                      />
+                    </div>
+                    <strong>{item.minutes}分</strong>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className={styles.weeklyPage}>
+            <div className={styles.weeklyPanelHeader}>
+              <div>
+                <h3>部位別バランス</h3>
+                <p>五角形レーダーで訓練部位の偏りを可視化します。</p>
+              </div>
+            </div>
+
+            <div className={styles.weeklyRadarChartWrap}>
+              <svg className={styles.weeklyRadarChart} viewBox="0 0 200 200" role="img" aria-label="部位別バランスの五角レーダー図">
+                {radarLevels.map((level) => (
+                  <polygon
+                    className={styles.weeklyRadarGrid}
+                    key={level}
+                    points={radarAngles.map((angle) => radarPoint(angle, radarRadius * level)).join(" ")}
+                  />
+                ))}
+                {radarAngles.map((angle, index) => (
+                  <line
+                    className={styles.weeklyRadarAxis}
+                    key={weeklyReport.radarScores[index].area}
+                    x1={radarCenter}
+                    y1={radarCenter}
+                    x2={radarCenter + Math.cos(angle) * radarRadius}
+                    y2={radarCenter + Math.sin(angle) * radarRadius}
+                  />
+                ))}
+                <polygon className={styles.weeklyRadarArea} points={radarPolygon} />
+                {weeklyReport.radarScores.map((item, index) => (
+                  <g key={item.area}>
+                    <circle
+                      className={styles.weeklyRadarPoint}
+                      cx={radarCenter + Math.cos(radarAngles[index]) * radarRadius * (activePage === 2 && mounted ? item.score / maxRadarScore : 0)}
+                      cy={radarCenter + Math.sin(radarAngles[index]) * radarRadius * (activePage === 2 && mounted ? item.score / maxRadarScore : 0)}
+                      r="3.5"
+                    />
+                    <text
+                      className={styles.weeklyRadarLabel}
+                      textAnchor="middle"
+                      x={radarCenter + Math.cos(radarAngles[index]) * 91}
+                      y={radarCenter + Math.sin(radarAngles[index]) * 91 + 4}
+                    >
+                      {item.area}
+                    </text>
+                    <text
+                      className={styles.weeklyRadarValue}
+                      textAnchor="middle"
+                      x={radarCenter + Math.cos(radarAngles[index]) * 81}
+                      y={radarCenter + Math.sin(radarAngles[index]) * 81 + 4}
+                    >
+                      {item.score}
+                    </text>
+                  </g>
+                ))}
+              </svg>
+            </div>
+          </section>
+
+          <section className={styles.weeklyPage}>
+            <div className={styles.weeklyPanelHeader}>
+              <div>
+                <h3>開始時間タイムライン</h3>
+                <p>24時間上の開始位置を一週間分ならべました。</p>
+              </div>
+            </div>
+
+            <div className={styles.weeklyTimelineScale}>
+              <span>0</span>
+              <span>6</span>
+              <span>12</span>
+              <span>18</span>
+              <span>24</span>
+            </div>
+
+            <div className={styles.weeklyTimelineList}>
+              {weeklyReport.startTimeTimeline.map((item, index) => (
+                <div className={styles.weeklyTimelineRow} key={item.day}>
+                  <span>{item.label}</span>
+
+                  <div>
+                    <i
+                      style={{
+                        left: mounted ? `${(item.hour / 24) * 100}%` : "0%",
+                        transitionDelay: `${index * 90}ms`,
+                      }}
+                    >
+                      ↓
+                    </i>
+                  </div>
+
+                  <strong>{item.hour}:00</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div className={styles.weeklyPageActions}>
+        <button
+          disabled={activePage === 0}
+          onClick={() => movePage(-1)}
+          type="button"
+        >
+          上へ
+        </button>
+        <span>{activePage + 1} / {pages.length} · {pages[activePage].label}</span>
+        <button
+          disabled={activePage === pages.length - 1}
+          onClick={() => movePage(1)}
+          type="button"
+        >
+          下へ
+        </button>
       </div>
     </article>
   );
