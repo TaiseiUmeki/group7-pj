@@ -8,6 +8,7 @@ import { availableTags, exercisesByBodyPart } from "../constants/workout";
 import type { BodyPart, Connection, DetailedWorkoutInput, Profile, ProfileTag, SupportTarget, TimelinePost, TimelineTab, WorkoutSession } from "../types/workout";
 import { formatStopwatch, getDaysWithoutPost, getLocalDateTimeInputValue, getWorkoutElapsed } from "../utils/workout";
 import { ArrowIcon, ChevronIcon, HeartIcon, PauseIcon, PlayIcon, PlusIcon, StopIcon, UserIcon } from "./icons";
+import { WeeklyReportCard } from "./WeeklyReportCard";
 
 type TourTarget = "create-record" | "support-card" | "follow-card" | "like-button" | "detail-button" | "recommend-card";
 
@@ -693,6 +694,7 @@ export function ProfileScreen({
 }) {
   const [panel, setPanel] = useState<"summary" | "edit" | "following" | "followers">("summary");
   const [inactiveDays, setInactiveDays] = useState<number | null>(null);
+  const [weeklyReportOpen, setWeeklyReportOpen] = useState(false);
 
   useEffect(() => {
     setInactiveDays(getDaysWithoutPost(profile.lastPostedAt));
@@ -789,6 +791,12 @@ export function ProfileScreen({
         </div>
 
         {own ? (
+          <button className={styles.weeklyReportButton} onClick={() => setWeeklyReportOpen(true)} type="button">
+            先週の訓練レポ💪
+          </button>
+        ) : null}
+
+        {own ? (
           <section className={styles.badges} aria-label="自分のバッジ">
             <div className={styles.logHeader}>
               <h3>自分のバッジ</h3>
@@ -852,6 +860,23 @@ export function ProfileScreen({
           </button>
         ) : null}
       </div>
+
+      {weeklyReportOpen ? (
+        <div className={styles.reportModalOverlay} role="presentation" onClick={() => setWeeklyReportOpen(false)}>
+          <div
+            aria-label="先週の訓練レポ"
+            aria-modal="true"
+            className={styles.reportModal}
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <button className={styles.reportModalClose} onClick={() => setWeeklyReportOpen(false)} type="button">
+              閉じる
+            </button>
+            <WeeklyReportCard />
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

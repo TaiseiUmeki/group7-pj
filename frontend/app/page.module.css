@@ -1074,6 +1074,544 @@
   border-radius: 16px;
 }
 
+.weeklyReportButton {
+  width: 100%;
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: -14px 0 30px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #142035;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 12px 26px rgba(20, 32, 53, 0.16);
+}
+
+.reportModalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: rgba(10, 18, 32, 0.52);
+  backdrop-filter: blur(10px);
+}
+
+.reportModal {
+  width: min(100%, 720px);
+  max-height: min(86vh, 860px);
+  overflow: auto;
+  position: relative;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 28px 70px rgba(10, 18, 32, 0.28);
+}
+
+.reportModalClose {
+  position: sticky;
+  top: 14px;
+  z-index: 2;
+  float: right;
+  margin: 14px 14px 0 0;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(20, 32, 53, 0.9);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.weeklyReportCard {
+  padding: 24px;
+}
+
+.weeklyReportHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.weeklyReportHeader span {
+  color: #316cf0;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.weeklyReportHeader h2 {
+  margin: 4px 0 0;
+  font-size: 24px;
+}
+
+.weeklyReportHeader > strong {
+  min-width: 54px;
+  min-height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff1ce;
+  color: #cf8b00;
+  font-size: 18px;
+}
+
+.weeklyReportSummary {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.weeklyReportSummary div {
+  padding: 14px;
+  border-radius: 12px;
+  background: #f3f6fb;
+}
+
+.weeklyReportSummary span,
+.weeklyReportSection h3 {
+  color: #667488;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.weeklyReportSummary strong {
+  display: block;
+  margin-top: 6px;
+  color: #17243c;
+  font-size: 22px;
+}
+
+.weeklyReportSection {
+  margin-top: 20px;
+}
+
+.weeklyReportSection h3 {
+  margin: 0 0 10px;
+}
+
+.weeklyBarList,
+.radarScoreList {
+  display: grid;
+  gap: 9px;
+}
+
+.weeklyBarRow,
+.radarScoreRow {
+  display: grid;
+  grid-template-columns: 76px 1fr 48px;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.weeklyBarRow div,
+.radarScoreRow div {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf1f6;
+}
+
+.weeklyBarRow i,
+.radarScoreRow i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #316cf0, #44c073);
+}
+
+.weeklyBarRow strong,
+.radarScoreRow strong {
+  text-align: right;
+}
+
+.startTimeline {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+
+.startTimeline span {
+  min-height: 60px;
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  border-radius: 10px;
+  background: #f7f9fc;
+}
+
+.startTimeline small {
+  color: #778397;
+  font-size: 10px;
+}
+
+.startTimeline strong {
+  color: #17243c;
+  font-size: 13px;
+}
+
+.weeklyReportCard {
+  position: relative;
+  overflow: hidden;
+  width: min(100%, 980px);
+  margin: 0 auto;
+  padding: 32px;
+  border-radius: 32px;
+  color: #fff;
+  background:
+    radial-gradient(circle at top left, rgba(120, 98, 255, 0.45), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(0, 210, 255, 0.28), transparent 34%),
+    linear-gradient(135deg, #111827 0%, #161b33 50%, #0b1020 100%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.weeklyGlow {
+  position: absolute;
+  inset: -120px auto auto -120px;
+  width: 260px;
+  height: 260px;
+  border-radius: 999px;
+  background: rgba(126, 87, 255, 0.55);
+  filter: blur(60px);
+  pointer-events: none;
+}
+
+.weeklyReportHero {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: flex-start;
+  margin-bottom: 28px;
+}
+
+.weeklyEyebrow {
+  margin: 0 0 8px;
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.weeklyTitle {
+  margin: 0;
+  font-size: clamp(28px, 5vw, 48px);
+  line-height: 1.05;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+}
+
+.weeklyLead {
+  max-width: 560px;
+  margin: 12px 0 0;
+  color: rgba(255, 255, 255, 0.68);
+  line-height: 1.7;
+  font-size: 14px;
+}
+
+.weeklyRankBadge {
+  flex: 0 0 auto;
+  min-width: 148px;
+  padding: 18px 20px;
+  border-radius: 24px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(12px);
+}
+
+.weeklyRankBadge span {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.weeklyRankBadge strong {
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.weeklyStatsGrid {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.weeklyMainStat,
+.weeklySmallStat,
+.weeklyPanel {
+  background: rgba(255, 255, 255, 0.085);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(14px);
+}
+
+.weeklyMainStat,
+.weeklySmallStat {
+  padding: 22px;
+  border-radius: 24px;
+}
+
+.weeklyMainStat span,
+.weeklySmallStat span {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.weeklyMainStat strong {
+  display: block;
+  font-size: clamp(44px, 8vw, 72px);
+  line-height: 1;
+  font-weight: 950;
+  letter-spacing: -0.06em;
+}
+
+.weeklySmallStat strong {
+  display: block;
+  font-size: 34px;
+  line-height: 1.1;
+  font-weight: 900;
+}
+
+.weeklyMainStat small,
+.weeklySmallStat small {
+  display: block;
+  margin-top: 10px;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.weeklyPanel {
+  position: relative;
+  padding: 22px;
+  border-radius: 26px;
+}
+
+.weeklyPanelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.weeklyPanelHeader h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.weeklyPanelHeader p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.weeklyPanelHeader > strong {
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.weeklyBarChart {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 12px;
+  height: 220px;
+  align-items: end;
+}
+
+.weeklyBarItem {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.weeklyBarColumn {
+  position: relative;
+  height: 180px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09);
+  overflow: hidden;
+}
+
+.weeklyBarColumn i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #9f7bff 0%, #5ce1ff 100%);
+  transition: height 1100ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.weeklyBarItem span {
+  display: block;
+  margin-top: 10px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.weeklyBarItem:hover .weeklyBarColumn,
+.weeklyBarItemActive .weeklyBarColumn {
+  outline: 2px solid rgba(255, 255, 255, 0.38);
+  outline-offset: 4px;
+}
+
+.weeklyBarItem:hover span,
+.weeklyBarItemActive span {
+  color: #fff;
+}
+
+.weeklyBottomGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.weeklyRadarList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.weeklyRadarRow {
+  display: grid;
+  grid-template-columns: 64px 1fr 48px;
+  gap: 12px;
+  align-items: center;
+}
+
+.weeklyRadarRow span {
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.weeklyRadarRow div {
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.11);
+  overflow: hidden;
+}
+
+.weeklyRadarRow i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ffcf5c, #ff7ac8);
+  transition: width 1000ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.weeklyRadarRow strong {
+  text-align: right;
+  font-size: 13px;
+}
+
+.weeklyTimelineScale {
+  display: flex;
+  justify-content: space-between;
+  margin-left: 34px;
+  margin-right: 54px;
+  margin-bottom: 10px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.weeklyTimelineList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.weeklyTimelineRow {
+  display: grid;
+  grid-template-columns: 24px 1fr 48px;
+  gap: 12px;
+  align-items: center;
+}
+
+.weeklyTimelineRow > span {
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.weeklyTimelineRow > div {
+  position: relative;
+  height: 18px;
+  border-radius: 999px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.08),
+      rgba(255, 255, 255, 0.16),
+      rgba(255, 255, 255, 0.08)
+    );
+}
+
+.weeklyTimelineRow i {
+  position: absolute;
+  top: -13px;
+  transform: translateX(-50%);
+  font-style: normal;
+  font-size: 22px;
+  color: #5ce1ff;
+  filter: drop-shadow(0 0 12px rgba(92, 225, 255, 0.7));
+  transition: left 1100ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.weeklyTimelineRow strong {
+  text-align: right;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+@media (max-width: 760px) {
+  .weeklyReportCard {
+    padding: 22px;
+    border-radius: 24px;
+  }
+
+  .weeklyReportHero {
+    flex-direction: column;
+  }
+
+  .weeklyRankBadge {
+    width: 100%;
+  }
+
+  .weeklyStatsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .weeklyBottomGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .weeklyBarChart {
+    gap: 8px;
+  }
+}
+
 .badges {
   margin-bottom: 34px;
 }
@@ -2075,6 +2613,7 @@ html[data-theme="dark"] .themeToggleButton { background: #000; color: #fff; box-
 html[data-theme="dark"] .recommendationPanel,
 html[data-theme="dark"] .post,
 html[data-theme="dark"] .detailCard,
+html[data-theme="dark"] .reportModal,
 html[data-theme="dark"] .recommendationItem ,
 html[data-theme="dark"] .badgeCard,
 html[data-theme="dark"] .stats,
@@ -2098,6 +2637,23 @@ html[data-theme="dark"] .supportPanel div {
   background: rgb(41, 41, 41);
   color: #fff;
 }
+
+html[data-theme="dark"] .weeklyReportButton {
+  background: #eef4ff;
+  color: #142035;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+}
+
+html[data-theme="dark"] .weeklyReportSummary div,
+html[data-theme="dark"] .startTimeline span {
+  background: var(--surface-soft);
+}
+
+html[data-theme="dark"] .weeklyBarRow div,
+html[data-theme="dark"] .radarScoreRow div {
+  background: rgba(255, 255, 255, 0.1);
+}
+
 html[data-theme="dark"] .signoutButton {
     background: #222222;
     color: var(--danger);
