@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IRONLOG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+JP:wght@300;400;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{--orange:#FF5C1A;--lime:#C8F135;--dark:#0D0D0D;--dark2:#161616;--dark3:#1E1E1E;--gray:#888;--white:#F5F5F0;--font-display:'Bebas Neue',sans-serif;--font-body:'Noto Sans JP',sans-serif;--font-mono:'Space Mono',monospace;}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--dark);color:var(--white);}
+#app{width:100%;height:100%;}
+.swiper{width:100%;height:100vh;}
+.swiper-slide{display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;}
+.swiper-slide::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");}
+.slide-inner{position:relative;z-index:2;width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:60px 40px;}
+
+/* LANG TOGGLE */
+.lang-toggle{position:fixed;top:28px;right:32px;z-index:200;display:flex;align-items:center;border:1px solid rgba(255,255,255,0.15);overflow:hidden;}
+.lang-btn{font-family:var(--font-mono);font-size:11px;letter-spacing:2px;padding:8px 16px;border:none;cursor:pointer;background:transparent;color:var(--gray);transition:all 0.25s;}
+.lang-btn.active{background:var(--orange);color:var(--dark);font-weight:700;}
+.lang-btn:hover:not(.active){color:var(--white);background:rgba(255,255,255,0.05);}
+.lang-divider{width:1px;height:36px;background:rgba(255,255,255,0.15);}
+
+/* PROGRESS */
+.progress-bar{position:fixed;right:32px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:10px;z-index:100;}
+.progress-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.2);transition:all 0.3s ease;cursor:pointer;}
+.progress-dot.active{background:var(--orange);transform:scale(1.5);}
+.slide-counter{position:fixed;left:32px;bottom:32px;font-family:var(--font-mono);font-size:12px;color:var(--gray);letter-spacing:2px;z-index:100;}
+.slide-counter span{color:var(--orange);}
+.scroll-hint{position:fixed;bottom:32px;right:50%;transform:translateX(50%);font-family:var(--font-mono);font-size:11px;color:var(--gray);letter-spacing:3px;z-index:100;display:flex;flex-direction:column;align-items:center;gap:8px;animation:fadeHint 3s ease 2s forwards;}
+.scroll-hint-arrow{width:1px;height:32px;background:linear-gradient(to bottom,var(--orange),transparent);animation:bounceDown 1.5s ease infinite;}
+@keyframes bounceDown{0%,100%{transform:scaleY(1)}50%{transform:scaleY(1.4)}}
+@keyframes fadeHint{0%{opacity:1}80%{opacity:1}100%{opacity:0;pointer-events:none}}
+
+/* HERO */
+.s1{background:var(--dark);}
+.s1 .hero-bg{position:absolute;inset:0;background:radial-gradient(ellipse 60% 70% at 70% 50%,rgba(255,92,26,0.12) 0%,transparent 70%),radial-gradient(ellipse 40% 40% at 20% 80%,rgba(200,241,53,0.06) 0%,transparent 60%);}
+.s1 .hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px);background-size:60px 60px;}
+.hero-content{max-width:900px;width:100%;}
+.hero-tag{font-family:var(--font-mono);font-size:12px;letter-spacing:4px;color:var(--orange);margin-bottom:24px;opacity:0;animation:slideUp 0.8s ease 0.2s forwards;}
+.hero-title{font-family:var(--font-display);font-size:clamp(80px,14vw,180px);line-height:0.9;color:var(--white);letter-spacing:2px;opacity:0;animation:slideUp 0.8s ease 0.4s forwards;}
+.hero-title .accent{color:var(--orange);}
+.hero-sub{font-family:var(--font-body);font-size:16px;font-weight:300;color:var(--gray);margin-top:28px;line-height:1.9;max-width:480px;opacity:0;animation:slideUp 0.8s ease 0.6s forwards;}
+.hero-sub em{color:var(--white);font-style:normal;font-weight:400;}
+.hero-en{font-family:var(--font-mono);font-size:11px;letter-spacing:3px;color:rgba(255,255,255,0.2);margin-top:12px;opacity:0;animation:slideUp 0.8s ease 0.8s forwards;}
+.hero-cta{margin-top:48px;opacity:0;animation:slideUp 0.8s ease 1s forwards;display:flex;gap:16px;flex-wrap:wrap;}
+.btn-primary{background:var(--orange);color:var(--dark);font-family:var(--font-mono);font-size:13px;letter-spacing:2px;padding:14px 32px;border:none;cursor:pointer;font-weight:700;transition:all 0.2s;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px));}
+.btn-primary:hover{background:var(--lime);transform:translateY(-2px);}
+.btn-ghost{background:transparent;color:var(--white);font-family:var(--font-mono);font-size:13px;letter-spacing:2px;padding:14px 32px;border:1px solid rgba(255,255,255,0.2);cursor:pointer;transition:all 0.2s;}
+.btn-ghost:hover{border-color:var(--orange);color:var(--orange);transform:translateY(-2px);}
+
+/* SECTIONS */
+.s2{background:var(--dark2);}
+.s3{background:var(--dark);}
+.s4{background:var(--dark2);}
+.s5{background:var(--dark);}
+.s6{background:var(--dark2);}
+.s7{background:var(--dark);}
+.section-label{font-family:var(--font-mono);font-size:11px;letter-spacing:4px;color:var(--orange);margin-bottom:16px;opacity:0;transform:translateX(-20px);transition:all 0.6s ease;}
+.section-title{font-family:var(--font-display);font-size:clamp(36px,6vw,72px);line-height:1;color:var(--white);margin-bottom:48px;opacity:0;transform:translateX(-20px);transition:all 0.6s ease 0.1s;}
+.section-title .dim{color:rgba(255,255,255,0.2);}
+
+/* PROBLEM */
+.prob-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(255,255,255,0.06);}
+.prob-card{background:var(--dark2);padding:32px 28px;opacity:0;transform:translateY(20px);transition:all 0.5s ease;}
+.prob-card:hover{background:var(--dark3);}
+.prob-num{font-family:var(--font-display);font-size:56px;color:rgba(255,92,26,0.2);line-height:1;margin-bottom:16px;}
+.prob-head{font-family:var(--font-body);font-size:16px;font-weight:700;color:var(--white);margin-bottom:10px;}
+.prob-body{font-family:var(--font-body);font-size:13px;font-weight:300;color:var(--gray);line-height:1.8;}
+.prob-en{font-family:var(--font-mono);font-size:10px;letter-spacing:2px;color:rgba(255,255,255,0.15);margin-top:12px;}
+
+/* APPROACH */
+.approach-split{display:grid;grid-template-columns:1fr 1fr;gap:2px;margin-top:48px;background:rgba(255,255,255,0.06);}
+.approach-side{padding:40px 36px;opacity:0;transform:translateY(20px);transition:all 0.6s ease;}
+.approach-side.left{background:var(--dark3);border-left:3px solid var(--orange);}
+.approach-side.right{background:var(--dark3);border-left:3px solid var(--lime);}
+.approach-icon{font-size:40px;margin-bottom:20px;}
+.approach-type{font-family:var(--font-mono);font-size:10px;letter-spacing:3px;margin-bottom:8px;}
+.approach-type.pos{color:var(--orange);}
+.approach-type.neg{color:var(--lime);}
+.approach-head{font-family:var(--font-body);font-size:20px;font-weight:700;color:var(--white);margin-bottom:12px;}
+.approach-body{font-family:var(--font-body);font-size:13px;font-weight:300;color:var(--gray);line-height:1.9;}
+.approach-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px;}
+.tag{font-family:var(--font-mono);font-size:10px;letter-spacing:1px;padding:4px 10px;border:1px solid;}
+.tag.orange{border-color:var(--orange);color:var(--orange);}
+.tag.lime{border-color:var(--lime);color:var(--lime);}
+
+/* FEATURES */
+.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(255,255,255,0.06);margin-top:48px;}
+.feature-card{background:var(--dark2);padding:36px 28px;opacity:0;transform:translateY(24px);transition:all 0.5s ease;position:relative;overflow:hidden;}
+.feature-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--orange);transform:scaleX(0);transform-origin:left;transition:transform 0.3s ease;}
+.feature-card:hover::after{transform:scaleX(1);}
+.feature-card:hover{background:var(--dark3);}
+.feature-num{font-family:var(--font-display);font-size:80px;color:rgba(255,255,255,0.04);position:absolute;top:16px;right:20px;line-height:1;}
+.feature-icon-wrap{width:48px;height:48px;border:1px solid rgba(255,92,26,0.3);display:flex;align-items:center;justify-content:center;margin-bottom:20px;font-size:22px;}
+.feature-head{font-family:var(--font-body);font-size:17px;font-weight:700;color:var(--white);margin-bottom:10px;}
+.feature-en{font-family:var(--font-mono);font-size:10px;letter-spacing:2px;color:var(--orange);margin-bottom:10px;}
+.feature-body{font-family:var(--font-body);font-size:13px;font-weight:300;color:var(--gray);line-height:1.8;}
+.feature-list{list-style:none;margin-top:14px;}
+.feature-list li{font-family:var(--font-body);font-size:12px;font-weight:300;color:rgba(255,255,255,0.4);padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;gap:8px;}
+.feature-list li::before{content:'—';color:var(--orange);font-size:10px;}
+
+/* FLOW */
+.flow-steps{display:flex;align-items:flex-start;gap:0;margin-top:48px;}
+.flow-step{flex:1;padding:0 24px;position:relative;opacity:0;transform:translateY(20px);transition:all 0.5s ease;}
+.flow-step::after{content:'→';position:absolute;right:-12px;top:32px;font-size:20px;color:rgba(255,92,26,0.4);}
+.flow-step:last-child::after{display:none;}
+.flow-num{font-family:var(--font-display);font-size:64px;color:var(--orange);line-height:1;margin-bottom:12px;}
+.flow-line{width:32px;height:2px;background:var(--orange);margin-bottom:16px;}
+.flow-head{font-family:var(--font-body);font-size:15px;font-weight:700;color:var(--white);margin-bottom:8px;}
+.flow-en{font-family:var(--font-mono);font-size:10px;letter-spacing:2px;color:var(--gray);margin-bottom:10px;}
+.flow-body{font-family:var(--font-body);font-size:12px;font-weight:300;color:var(--gray);line-height:1.8;}
+
+/* TECH */
+.tech-content{max-width:900px;width:100%;}
+.tech-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(255,255,255,0.06);margin-top:48px;}
+.tech-card{background:var(--dark2);padding:32px 28px;opacity:0;transform:translateY(20px);transition:all 0.5s ease;}
+.tech-card:hover{background:var(--dark3);}
+.tech-layer{font-family:var(--font-mono);font-size:10px;letter-spacing:3px;color:var(--orange);margin-bottom:16px;}
+.tech-name{font-family:var(--font-display);font-size:32px;color:var(--white);margin-bottom:8px;}
+.tech-detail{font-family:var(--font-body);font-size:12px;font-weight:300;color:var(--gray);line-height:1.8;}
+
+/* CTA */
+.s7 .cta-bg{position:absolute;inset:0;background:radial-gradient(ellipse 70% 70% at 50% 50%,rgba(255,92,26,0.15) 0%,transparent 70%);}
+.cta-content{max-width:700px;text-align:center;}
+.cta-tag{font-family:var(--font-mono);font-size:11px;letter-spacing:4px;color:var(--orange);margin-bottom:24px;opacity:0;transition:all 0.6s ease;}
+.cta-title{font-family:var(--font-display);font-size:clamp(50px,10vw,100px);line-height:1;color:var(--white);opacity:0;transition:all 0.6s ease 0.1s;}
+.cta-title .orange{color:var(--orange);}
+.cta-sub{font-family:var(--font-body);font-size:15px;font-weight:300;color:var(--gray);margin-top:24px;line-height:1.8;opacity:0;transition:all 0.6s ease 0.2s;}
+.cta-buttons{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-top:48px;opacity:0;transition:all 0.6s ease 0.3s;}
+.btn-cta{background:var(--orange);color:var(--dark);font-family:var(--font-mono);font-size:14px;letter-spacing:2px;padding:18px 48px;border:none;cursor:pointer;font-weight:700;transition:all 0.2s;text-decoration:none;display:inline-block;clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px));}
+.btn-cta:hover{background:var(--lime);transform:translateY(-3px);letter-spacing:3px;}
+.cta-made{font-family:var(--font-mono);font-size:10px;letter-spacing:2px;color:rgba(255,255,255,0.12);margin-top:48px;opacity:0;transition:all 0.6s ease 0.5s;}
+
+@keyframes slideUp{from{opacity:0;transform:translateY(24px);}to{opacity:1;transform:translateY(0);}}
+
+/* ANIMATE IN */
+.swiper-slide-active .section-label,.swiper-slide-active .section-title{opacity:1;transform:translateX(0);}
+.swiper-slide-active .prob-card{opacity:1;transform:translateY(0);}
+.swiper-slide-active .approach-side{opacity:1;transform:translateY(0);}
+.swiper-slide-active .feature-card{opacity:1;transform:translateY(0);}
+.swiper-slide-active .flow-step{opacity:1;transform:translateY(0);}
+.swiper-slide-active .tech-card{opacity:1;transform:translateY(0);}
+.swiper-slide-active .cta-tag,.swiper-slide-active .cta-title,.swiper-slide-active .cta-sub,.swiper-slide-active .cta-buttons,.swiper-slide-active .cta-made{opacity:1;transform:translateY(0);}
+.prob-card:nth-child(1){transition-delay:0.1s;}
+.prob-card:nth-child(2){transition-delay:0.25s;}
+.prob-card:nth-child(3){transition-delay:0.4s;}
+.approach-side.left{transition-delay:0.1s;}
+.approach-side.right{transition-delay:0.3s;}
+.feature-card:nth-child(1){transition-delay:0.1s;}
+.feature-card:nth-child(2){transition-delay:0.25s;}
+.feature-card:nth-child(3){transition-delay:0.4s;}
+.flow-step:nth-child(1){transition-delay:0.1s;}
+.flow-step:nth-child(2){transition-delay:0.2s;}
+.flow-step:nth-child(3){transition-delay:0.3s;}
+.flow-step:nth-child(4){transition-delay:0.4s;}
+.flow-step:nth-child(5){transition-delay:0.5s;}
+.tech-card:nth-child(1){transition-delay:0.1s;}
+.tech-card:nth-child(2){transition-delay:0.25s;}
+.tech-card:nth-child(3){transition-delay:0.4s;}
+
+/* LANG SWITCH FADE */
+.lang-switching [data-i18n]{opacity:0;transition:opacity 0.15s ease;}
+
+@media(max-width:768px){
+  .prob-cards,.features-grid,.tech-grid{grid-template-columns:1fr;}
+  .approach-split{grid-template-columns:1fr;}
+  .flow-steps{flex-direction:column;gap:32px;}
+  .flow-step::after{content:'↓';right:auto;left:8px;top:auto;bottom:-24px;}
+  .progress-bar{display:none;}
+  .hero-title{font-size:clamp(56px,16vw,100px);}
+  .lang-toggle{top:16px;right:16px;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+<div class="lang-toggle">
+  <button class="lang-btn active" id="btnJa" onclick="setLang('ja')">日本語</button>
+  <div class="lang-divider"></div>
+  <button class="lang-btn" id="btnEn" onclick="setLang('en')">EN</button>
+</div>
+
+<div class="progress-bar" id="progressBar"></div>
+<div class="slide-counter" id="slideCounter"><span>01</span> / 07</div>
+<div class="scroll-hint"><div class="scroll-hint-arrow"></div><span data-i18n="scroll">SCROLL</span></div>
+
+<div class="swiper" id="mainSwiper">
+<div class="swiper-wrapper">
+
+<!-- SLIDE 1 -->
+<div class="swiper-slide s1">
+  <div class="hero-bg"></div><div class="hero-grid"></div>
+  <div class="slide-inner"><div class="hero-content">
+    <p class="hero-tag" data-i18n="s1_tag">WORKOUT TRACKING APP — ラーメンあかつきはいいぞ  2026</p>
+    <h1 class="hero-title">IRON<span class="accent">LOG</span></h1>
+    <p class="hero-sub" data-i18n="s1_sub"><em>動機づけとコミュニティで、</em><br>「今日もやる」を習慣に変える。<br><span style="font-size:13px;color:rgba(255,255,255,0.4)">Keep going. Every rep counts.</span></p>
+    <p class="hero-en">MOTIVATION × COMMUNITY × RECORDS</p>
+    <div class="hero-cta">
+      <button class="btn-primary" data-i18n="s1_cta1" onclick="document.getElementById('mainSwiper').swiper.slideTo(6)">今すぐ体験 — TRY NOW</button>
+      <button class="btn-ghost" data-i18n="s1_cta2" onclick="document.getElementById('mainSwiper').swiper.slideNext()">詳細を見る ↓</button>
+    </div>
+  </div></div>
+</div>
+
+<!-- SLIDE 2 -->
+<div class="swiper-slide s2">
+  <div class="slide-inner"><div style="max-width:1000px;width:100%">
+    <p class="section-label" data-i18n="s2_label">PROBLEM — 課題</p>
+    <h2 class="section-title"><span data-i18n="s2_title">なぜ、続かないのか？</span><br><span class="dim" data-i18n="s2_title_sub">Why do people quit?</span></h2>
+    <div class="prob-cards">
+      <div class="prob-card"><div class="prob-num">01</div>
+        <p class="prob-head" data-i18n="s2_h1">目標が見えにくい</p>
+        <p class="prob-body" data-i18n="s2_b1">日々の変化が実感できず、継続する理由を見失いがちです。記録や可視化の手段がないことが大きな障壁です。</p>
+        <p class="prob-en">INVISIBLE PROGRESS</p>
+      </div>
+      <div class="prob-card"><div class="prob-num">02</div>
+        <p class="prob-head" data-i18n="s2_h2">孤独なトレーニング</p>
+        <p class="prob-body" data-i18n="s2_b2">一人でのトレーニングは自由ですが、励ましや競争心が生まれにくく、サボる理由を見つけやすくなります。</p>
+        <p class="prob-en">TRAINING ALONE</p>
+      </div>
+      <div class="prob-card"><div class="prob-num">03</div>
+        <p class="prob-head" data-i18n="s2_h3">習慣化の難しさ</p>
+        <p class="prob-body" data-i18n="s2_b3">忙しい日常の中で筋トレを優先する習慣を定着させることは容易ではありません。外部からの働きかけが不足しています。</p>
+        <p class="prob-en">HARD TO HABITUATE</p>
+      </div>
+    </div>
+  </div></div>
+</div>
+
+<!-- SLIDE 3 -->
+<div class="swiper-slide s3">
+  <div class="slide-inner"><div style="max-width:1000px;width:100%">
+    <p class="section-label" data-i18n="s3_label">APPROACH — アプローチ</p>
+    <h2 class="section-title"><span data-i18n="s3_title">二つの動機づけで</span><br><span class="dim">Dual Motivation System</span></h2>
+    <div class="approach-split">
+      <div class="approach-side left">
+        <div class="approach-icon">&#x1F3C6;</div>
+        <p class="approach-type pos" data-i18n="s3_pos_type">POSITIVE MOTIVATION — 積極的動機づけ</p>
+        <h3 class="approach-head" data-i18n="s3_pos_head">記録・投稿・承認</h3>
+        <p class="approach-body" data-i18n="s3_pos_body">トレーニング内容を記録・投稿し、フォロワーから「いいね」をもらうことで達成感と承認欲求を満たします。ポジティブなフィードバックが次の行動を促します。</p>
+        <div class="approach-tags">
+          <span class="tag orange" data-i18n="s3_t1">記録</span>
+          <span class="tag orange" data-i18n="s3_t2">投稿</span>
+          <span class="tag orange" data-i18n="s3_t3">いいね</span>
+          <span class="tag orange" data-i18n="s3_t4">バッジ</span>
+        </div>
+      </div>
+      <div class="approach-side right">
+        <div class="approach-icon">&#x1F514;</div>
+        <p class="approach-type neg" data-i18n="s3_neg_type">NEGATIVE MOTIVATION — 消極的動機づけ</p>
+        <h3 class="approach-head" data-i18n="s3_neg_head">通知・プレッシャー</h3>
+        <p class="approach-body" data-i18n="s3_neg_body">一定期間サボるとフォロワーに通知が届く仕組みを導入。社会的なプレッシャーを活用し、「見られている意識」が継続を後押しします。</p>
+        <div class="approach-tags">
+          <span class="tag lime" data-i18n="s3_t5">通知</span>
+          <span class="tag lime" data-i18n="s3_t6">プレッシャー</span>
+          <span class="tag lime" data-i18n="s3_t7">継続促進</span>
+        </div>
+      </div>
+    </div>
+  </div></div>
+</div>
+
+<!-- SLIDE 4 -->
+<div class="swiper-slide s4">
+  <div class="slide-inner"><div style="max-width:1050px;width:100%">
+    <p class="section-label" data-i18n="s4_label">FEATURES — 主要機能</p>
+    <h2 class="section-title"><span data-i18n="s4_title">3つのコア機能</span><br><span class="dim">Three Core Features</span></h2>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-num">1</div>
+        <div class="feature-icon-wrap">&#x1F4AA;</div>
+        <p class="feature-en">RECORD &amp; SHARE</p>
+        <h3 class="feature-head" data-i18n="s4_f1_head">トレーニング記録・投稿</h3>
+        <p class="feature-body" data-i18n="s4_f1_body">種目・重量・回数を簡単に記録し、タイムラインに投稿。フォロワーからいいねをもらいながら達成感を積み重ねます。</p>
+        <ul class="feature-list">
+          <li data-i18n="s4_f1_l1">種目・重量・回数を記録</li>
+          <li data-i18n="s4_f1_l2">タイムライン投稿 &amp; いいね</li>
+          <li data-i18n="s4_f1_l3">カレンダー形式の継続可視化</li>
+          <li data-i18n="s4_f1_l4">連続記録バッジ</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <div class="feature-num">2</div>
+        <div class="feature-icon-wrap">&#x1F514;</div>
+        <p class="feature-en">NOTIFICATION SYSTEM</p>
+        <h3 class="feature-head" data-i18n="s4_f2_head">通知システム</h3>
+        <p class="feature-body" data-i18n="s4_f2_body">サボりを防ぐスマートな通知機能。一定期間トレーニングがないとフォロワーへ通知が届き、社会的プレッシャーで継続を後押しします。</p>
+        <ul class="feature-list">
+          <li data-i18n="s4_f2_l1">サボり検知通知</li>
+          <li data-i18n="s4_f2_l2">フォロワーへのアラート</li>
+          <li data-i18n="s4_f2_l3">「見られている」意識を活用</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <div class="feature-num">3</div>
+        <div class="feature-icon-wrap">&#x1F6E1;&#xFE0F;</div>
+        <p class="feature-en">USER &amp; SECURITY</p>
+        <h3 class="feature-head" data-i18n="s4_f3_head">ユーザー管理 &amp; セキュリティ</h3>
+        <p class="feature-body" data-i18n="s4_f3_body">プロフィール・目標設定から投稿の公開範囲まで、安全に・自分のペースで使えるカスタマイズ機能を完備。</p>
+        <ul class="feature-list">
+          <li data-i18n="s4_f3_l1">プロフィール &amp; 目標設定</li>
+          <li data-i18n="s4_f3_l2">プライバシー設定</li>
+          <li data-i18n="s4_f3_l3">安全な認証システム</li>
+        </ul>
+      </div>
+    </div>
+  </div></div>
+</div>
+
+<!-- SLIDE 5 -->
+<div class="swiper-slide s5">
+  <div class="slide-inner"><div style="max-width:1050px;width:100%">
+    <p class="section-label" data-i18n="s5_label">HOW TO USE — 使い方</p>
+    <h2 class="section-title"><span data-i18n="s5_title">5ステップで始める</span><br><span class="dim">Get Started in 5 Steps</span></h2>
+    <div class="flow-steps">
+      <div class="flow-step"><div class="flow-num">01</div><div class="flow-line"></div>
+        <h3 class="flow-head" data-i18n="s5_s1_head">アカウント登録</h3><p class="flow-en">SIGN UP</p>
+        <p class="flow-body" data-i18n="s5_s1_body">メールアドレスで無料登録。プロフィールと目標を設定します。</p>
+      </div>
+      <div class="flow-step"><div class="flow-num">02</div><div class="flow-line"></div>
+        <h3 class="flow-head" data-i18n="s5_s2_head">フォロー</h3><p class="flow-en">CONNECT</p>
+        <p class="flow-body" data-i18n="s5_s2_body">仲間をフォローして、一緒に継続する環境を作ります。</p>
+      </div>
+      <div class="flow-step"><div class="flow-num">03</div><div class="flow-line"></div>
+        <h3 class="flow-head" data-i18n="s5_s3_head">記録・投稿</h3><p class="flow-en">LOG &amp; POST</p>
+        <p class="flow-body" data-i18n="s5_s3_body">毎日のトレーニングを記録してタイムラインに投稿。</p>
+      </div>
+      <div class="flow-step"><div class="flow-num">04</div><div class="flow-line"></div>
+        <h3 class="flow-head" data-i18n="s5_s4_head">いいね &amp; 通知</h3><p class="flow-en">ENGAGE</p>
+        <p class="flow-body" data-i18n="s5_s4_body">フォロワーからいいねをもらい、サボりは通知でお互いを刺激。</p>
+      </div>
+      <div class="flow-step"><div class="flow-num">05</div><div class="flow-line"></div>
+        <h3 class="flow-head" data-i18n="s5_s5_head">成長を確認</h3><p class="flow-en">TRACK GROWTH</p>
+        <p class="flow-body" data-i18n="s5_s5_body">カレンダーとバッジで継続記録を振り返り、達成感を実感。</p>
+      </div>
+    </div>
+  </div></div>
+</div>
+
+<!-- SLIDE 6 -->
+<div class="swiper-slide s6">
+  <div class="slide-inner"><div class="tech-content">
+    <p class="section-label" data-i18n="s6_label">TECHNOLOGY — 技術スタック</p>
+    <h2 class="section-title"><span data-i18n="s6_title">本格的な技術基盤</span><br><span class="dim">Built with Modern Stack</span></h2>
+    <div class="tech-grid">
+      <div class="tech-card"><p class="tech-layer">FRONTEND</p><p class="tech-name">Next.js</p>
+        <p class="tech-detail" data-i18n="s6_t1">TypeScript による型安全な UI 実装。画面遷移設計・レスポンシブ対応を含む、快適なユーザー体験を提供します。</p>
+      </div>
+      <div class="tech-card"><p class="tech-layer">BACKEND</p><p class="tech-name">Gin / Go</p>
+        <p class="tech-detail" data-i18n="s6_t2">高速・軽量な Go 製フレームワーク。API 設計・ビジネスロジック・通知機能の実装を担当しています。</p>
+      </div>
+      <div class="tech-card"><p class="tech-layer">INFRA / DB</p><p class="tech-name">MySQL + Docker</p>
+        <p class="tech-detail" data-i18n="s6_t3">MySQL によるスキーマ設計と Docker による環境構築・デプロイパイプラインで、安定した運用基盤を実現しています。</p>
+      </div>
+    </div>
+  </div></div>
+</div>
+
+<!-- SLIDE 7 -->
+<div class="swiper-slide s7">
+  <div class="cta-bg"></div>
+  <div class="slide-inner"><div class="cta-content">
+    <p class="cta-tag" data-i18n="s7_tag">START YOUR JOURNEY — 今すぐ始めよう</p>
+    <h2 class="cta-title" data-i18n="s7_title">今日から<br><span class="orange">継続</span>を変える。</h2>
+    <p class="cta-sub" data-i18n="s7_sub">IRONLOG は、あなたのトレーニングを記録・共有し、<br>コミュニティの力で「続ける習慣」を作ります。<br><span style="font-size:13px;opacity:0.5">Start logging. Stay accountable. Grow together.</span></p>
+    <div class="cta-buttons"><a href="/" target="_top" class="btn-cta" data-i18n="s7_cta">今すぐ体験する — START NOW</a></div>
+    <p class="cta-made" data-i18n="s7_made">IRONLOG — ラーメンあかつきはいいぞ  2026 — BUILT WITH NEXT.JS + GIN + MYSQL</p>
+  </div></div>
+</div>
+
+</div>
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+<script>
+var i18n = {
+  ja: {
+    scroll: 'SCROLL',
+    s1_tag: 'WORKOUT TRACKING APP — ラーメンあかつきはいいぞ  2026 ',
+    s1_sub: '<em>動機づけとコミュニティで、</em><br>「今日もやる」を習慣に変える。<br><span style="font-size:13px;color:rgba(255,255,255,0.4)">Keep going. Every rep counts.</span>',
+    s1_cta1: '今すぐ体験 — TRY NOW', s1_cta2: '詳細を見る ↓',
+    s2_label: 'PROBLEM — 課題', s2_title: 'なぜ、続かないのか？', s2_title_sub: 'Why do people quit?',
+    s2_h1: '目標が見えにくい', s2_b1: '日々の変化が実感できず、継続する理由を見失いがちです。記録や可視化の手段がないことが大きな障壁です。',
+    s2_h2: '孤独なトレーニング', s2_b2: '一人でのトレーニングは自由ですが、励ましや競争心が生まれにくく、サボる理由を見つけやすくなります。',
+    s2_h3: '習慣化の難しさ', s2_b3: '忙しい日常の中で筋トレを優先する習慣を定着させることは容易ではありません。外部からの働きかけが不足しています。',
+    s3_label: 'APPROACH — アプローチ', s3_title: '二つの動機づけで',
+    s3_pos_type: 'POSITIVE MOTIVATION — 積極的動機づけ', s3_pos_head: '記録・投稿・承認',
+    s3_pos_body: 'トレーニング内容を記録・投稿し、フォロワーから「いいね」をもらうことで達成感と承認欲求を満たします。ポジティブなフィードバックが次の行動を促します。',
+    s3_t1:'記録', s3_t2:'投稿', s3_t3:'いいね', s3_t4:'バッジ',
+    s3_neg_type: 'NEGATIVE MOTIVATION — 消極的動機づけ', s3_neg_head: '通知・プレッシャー',
+    s3_neg_body: '一定期間サボるとフォロワーに通知が届く仕組みを導入。社会的なプレッシャーを活用し、「見られている意識」が継続を後押しします。',
+    s3_t5:'通知', s3_t6:'プレッシャー', s3_t7:'継続促進',
+    s4_label: 'FEATURES — 主要機能', s4_title: '3つのコア機能',
+    s4_f1_head: 'トレーニング記録・投稿', s4_f1_body: '種目・重量・回数を簡単に記録し、タイムラインに投稿。フォロワーからいいねをもらいながら達成感を積み重ねます。',
+    s4_f1_l1:'種目・重量・回数を記録', s4_f1_l2:'タイムライン投稿 &amp; いいね', s4_f1_l3:'カレンダー形式の継続可視化', s4_f1_l4:'連続記録バッジ',
+    s4_f2_head: '通知システム', s4_f2_body: 'サボりを防ぐスマートな通知機能。一定期間トレーニングがないとフォロワーへ通知が届き、社会的プレッシャーで継続を後押しします。',
+    s4_f2_l1:'サボり検知通知', s4_f2_l2:'フォロワーへのアラート', s4_f2_l3:'「見られている」意識を活用',
+    s4_f3_head: 'ユーザー管理 &amp; セキュリティ', s4_f3_body: 'プロフィール・目標設定から投稿の公開範囲まで、安全に・自分のペースで使えるカスタマイズ機能を完備。',
+    s4_f3_l1:'プロフィール &amp; 目標設定', s4_f3_l2:'プライバシー設定', s4_f3_l3:'安全な認証システム',
+    s5_label: 'HOW TO USE — 使い方', s5_title: '5ステップで始める',
+    s5_s1_head:'アカウント登録', s5_s1_body:'メールアドレスで無料登録。プロフィールと目標を設定します。',
+    s5_s2_head:'フォロー', s5_s2_body:'仲間をフォローして、一緒に継続する環境を作ります。',
+    s5_s3_head:'記録・投稿', s5_s3_body:'毎日のトレーニングを記録してタイムラインに投稿。',
+    s5_s4_head:'いいね &amp; 通知', s5_s4_body:'フォロワーからいいねをもらい、サボりは通知でお互いを刺激。',
+    s5_s5_head:'成長を確認', s5_s5_body:'カレンダーとバッジで継続記録を振り返り、達成感を実感。',
+    s6_label: 'TECHNOLOGY — 技術スタック', s6_title: '本格的な技術基盤',
+    s6_t1: 'TypeScript による型安全な UI 実装。画面遷移設計・レスポンシブ対応を含む、快適なユーザー体験を提供します。',
+    s6_t2: '高速・軽量な Go 製フレームワーク。API 設計・ビジネスロジック・通知機能の実装を担当しています。',
+    s6_t3: 'MySQL によるスキーマ設計と Docker による環境構築・デプロイパイプラインで、安定した運用基盤を実現しています。',
+    s7_tag: 'START YOUR JOURNEY — 今すぐ始めよう',
+    s7_title: '今日から<br><span class="orange">継続</span>を変える。',
+    s7_sub: 'IRONLOG は、あなたのトレーニングを記録・共有し、<br>コミュニティの力で「続ける習慣」を作ります。<br><span style="font-size:13px;opacity:0.5">Start logging. Stay accountable. Grow together.</span>',
+    s7_cta: '今すぐ体験する — START NOW',
+    s7_made: 'IRONLOG — ラーメンあかつきはいいぞ  2026 — BUILT WITH NEXT.JS + GIN + MYSQL'
+  },
+  en: {
+    scroll: 'SCROLL',
+    s1_tag: 'WORKOUT TRACKING APP — ラーメンあかつきはいいぞ  2026 ',
+    s1_sub: '<em>Motivation and community</em><br>turn "I\'ll do it today" into a lasting habit.<br><span style="font-size:13px;color:rgba(255,255,255,0.4)">Keep going. Every rep counts.</span>',
+    s1_cta1: 'TRY IT NOW', s1_cta2: 'LEARN MORE ↓',
+    s2_label: 'PROBLEM', s2_title: 'Why do people quit?', s2_title_sub: 'The real barriers to consistency.',
+    s2_h1: 'Invisible Progress', s2_b1: 'Daily changes are hard to notice. Without a way to record and visualize results, people lose their reason to keep going.',
+    s2_h2: 'Training Alone', s2_b2: 'Solo training is flexible, but lacks encouragement or competition — making it easy to find excuses to skip.',
+    s2_h3: 'Hard to Build Habits', s2_b3: 'Fitting workouts into a busy daily routine is tough. Without external nudges, the habit never sticks.',
+    s3_label: 'APPROACH', s3_title: 'Two Motivation Systems',
+    s3_pos_type: 'POSITIVE MOTIVATION', s3_pos_head: 'Record · Post · Get Recognized',
+    s3_pos_body: 'Log your workouts and post them to your timeline. Earn likes from followers, fulfilling your sense of achievement. Positive feedback drives the next action.',
+    s3_t1:'Log', s3_t2:'Post', s3_t3:'Likes', s3_t4:'Badges',
+    s3_neg_type: 'NEGATIVE MOTIVATION', s3_neg_head: 'Notifications · Social Pressure',
+    s3_neg_body: 'Go idle too long and your followers get notified. The awareness of being watched uses social pressure to keep you on track.',
+    s3_t5:'Alerts', s3_t6:'Pressure', s3_t7:'Accountability',
+    s4_label: 'FEATURES', s4_title: 'Three Core Features',
+    s4_f1_head: 'Workout Logging &amp; Sharing', s4_f1_body: 'Easily log exercises, weight, and reps, then post to your timeline. Collect likes from followers while building your sense of accomplishment.',
+    s4_f1_l1:'Log exercises, weight &amp; reps', s4_f1_l2:'Timeline posts &amp; likes', s4_f1_l3:'Calendar streak tracking', s4_f1_l4:'Streak badges',
+    s4_f2_head: 'Notification System', s4_f2_body: 'Smart alerts that prevent slacking. When there\'s no activity for a set period, followers get notified — social pressure keeps you moving.',
+    s4_f2_l1:'Inactivity detection alerts', s4_f2_l2:'Follower notifications', s4_f2_l3:'Accountability through visibility',
+    s4_f3_head: 'User Management &amp; Security', s4_f3_body: 'From profile setup and goal-setting to post visibility controls — customize everything and use the app safely at your own pace.',
+    s4_f3_l1:'Profile &amp; goal settings', s4_f3_l2:'Privacy controls', s4_f3_l3:'Secure authentication',
+    s5_label: 'HOW TO USE', s5_title: 'Get Started in 5 Steps',
+    s5_s1_head:'Create an Account', s5_s1_body:'Sign up free with your email. Set up your profile and training goals.',
+    s5_s2_head:'Follow Friends', s5_s2_body:'Follow workout buddies to build an environment of mutual accountability.',
+    s5_s3_head:'Log &amp; Post', s5_s3_body:'Record your daily training and share it to your timeline.',
+    s5_s4_head:'Likes &amp; Notifications', s5_s4_body:'Earn likes from followers and use notifications to keep each other on track.',
+    s5_s5_head:'Track Your Growth', s5_s5_body:'Review your streak on the calendar, collect badges, and feel the satisfaction of progress.',
+    s6_label: 'TECHNOLOGY', s6_title: 'Built on a Modern Stack',
+    s6_t1: 'Type-safe UI built with Next.js + TypeScript. Covers routing design and responsive layouts for a seamless user experience.',
+    s6_t2: 'Fast, lightweight Go framework. Handles API design, business logic, and the notification system.',
+    s6_t3: 'MySQL schema design paired with Docker-based environment setup and deployment pipelines for a stable production foundation.',
+    s7_tag: 'START YOUR JOURNEY',
+    s7_title: 'Change your habits,<br><span class="orange">starting today.</span>',
+    s7_sub: 'IRONLOG lets you log and share your workouts,<br>building a lasting habit powered by community.<br><span style="font-size:13px;opacity:0.5">Start logging. Stay accountable. Grow together.</span>',
+    s7_cta: 'START NOW',
+    s7_made: 'IRONLOG — ラーメンあかつきはいいぞ  2026 — BUILT WITH NEXT.JS + GIN + MYSQL'
+  }
+};
+
+var currentLang = 'ja';
+
+function setLang(lang) {
+  if (lang === currentLang) return;
+  currentLang = lang;
+  document.getElementById('btnJa').classList.toggle('active', lang === 'ja');
+  document.getElementById('btnEn').classList.toggle('active', lang === 'en');
+  var body = document.body;
+  body.classList.add('lang-switching');
+  setTimeout(function() {
+    var d = i18n[lang];
+    document.querySelectorAll('[data-i18n]').forEach(function(el) {
+      var key = el.getAttribute('data-i18n');
+      if (d[key] !== undefined) el.innerHTML = d[key];
+    });
+    document.documentElement.lang = lang === 'ja' ? 'ja' : 'en';
+    body.classList.remove('lang-switching');
+  }, 180);
+}
+
+var TOTAL = 7;
+var progressBar = document.getElementById('progressBar');
+var slideCounter = document.getElementById('slideCounter');
+for (var i = 0; i < TOTAL; i++) {
+  (function(idx) {
+    var dot = document.createElement('div');
+    dot.className = 'progress-dot' + (idx === 0 ? ' active' : '');
+    dot.addEventListener('click', function() { swiper.slideTo(idx); });
+    progressBar.appendChild(dot);
+  })(i);
+}
+
+var swiper = new Swiper('#mainSwiper', {
+  direction: 'vertical', speed: 800,
+  mousewheel: { sensitivity: 1 },
+  keyboard: { enabled: true },
+  on: {
+    slideChange: function() {
+      var idx = this.activeIndex;
+      document.querySelectorAll('.progress-dot').forEach(function(d, i) { d.classList.toggle('active', i === idx); });
+      slideCounter.innerHTML = '<span>' + String(idx+1).padStart(2,'0') + '</span> / 07';
+    }
+  }
+});
+</script>
+</body>
+</html>
