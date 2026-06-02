@@ -9,6 +9,89 @@ import type { BodyPart, Connection, DetailedWorkoutInput, Profile, ProfileTag, S
 import { formatStopwatch, getDaysWithoutPost, getLocalDateTimeInputValue, getWorkoutElapsed } from "../utils/workout";
 import { ArrowIcon, ChevronIcon, HeartIcon, PauseIcon, PlayIcon, PlusIcon, StopIcon, UserIcon } from "./icons";
 
+type TourTarget = "create-record" | "support-card" | "follow-card" | "like-button" | "detail-button" | "recommend-card";
+
+type TourStep = {
+  target: TourTarget;
+  tab: TimelineTab;
+  titleJa: string;
+  titleEn: string;
+  bodyJa: string;
+  bodyEn: string;
+};
+
+const timelineTourSteps: TourStep[] = [
+  {
+    target: "create-record",
+    tab: "following",
+    titleJa: "運動記録を追加",
+    titleEn: "Add a workout record",
+    bodyJa: "このボタンから今日のトレーニング内容を記録します。",
+    bodyEn: "Use this button to create today's workout record.",
+  },
+  {
+    target: "follow-card",
+    tab: "following",
+    titleJa: "フォローユーザーの投稿",
+    titleEn: "Following post card",
+    bodyJa: "フォローしているユーザーの運動記録を時系列で確認できます。",
+    bodyEn: "Review workout posts from people you follow in timeline order.",
+  },
+  {
+    target: "like-button",
+    tab: "following",
+    titleJa: "いいねボタン",
+    titleEn: "Like button",
+    bodyJa: "共感した投稿にはいいねを送り、相手の継続を応援できます。",
+    bodyEn: "Send a like to encourage posts that motivate you.",
+  },
+  {
+    target: "detail-button",
+    tab: "following",
+    titleJa: "トレーニング詳細",
+    titleEn: "Card details",
+    bodyJa: "詳細画面では実施日時、種目、メモなどを詳しく確認できます。",
+    bodyEn: "Open details to see the workout time, exercise, notes, and more.",
+  },
+  {
+    target: "recommend-card",
+    tab: "recommended",
+    titleJa: "おすすめユーザー",
+    titleEn: "Recommendation card",
+    bodyJa: "おすすめユーザーを見つけてフォローし、タイムラインを広げましょう。",
+    bodyEn: "Find recommended users, follow them, and expand your timeline.",
+  },
+  {
+    target: "support-card",
+    tab: "following",
+    titleJa: "応援ユーザー",
+    titleEn: "Support users",
+    bodyJa: "トレーニングが空いているフォロー先に「がんばれ」を送り、再開のきっかけを作れます。",
+    bodyEn: "Send encouragement to followed users who have not trained recently and help them restart.",
+  },
+];
+
+function getTourRect(target: TourTarget, rect: DOMRect) {
+  const cardTargets: TourTarget[] = ["support-card", "follow-card", "recommend-card"];
+  const isCardTarget = cardTargets.includes(target);
+  const viewportMargin = 18;
+  const horizontalInset = isCardTarget ? Math.min(18, rect.width / 10) : 0;
+  const verticalInset = isCardTarget ? Math.min(8, rect.height / 10) : 0;
+  const maxWidth = window.innerWidth - viewportMargin * 2;
+  const width = Math.max(32, Math.min(rect.width - horizontalInset * 2, maxWidth));
+  const left = Math.min(
+    Math.max(rect.left + horizontalInset, viewportMargin),
+    window.innerWidth - viewportMargin - width,
+  );
+
+  return {
+    left,
+    top: rect.top + verticalInset,
+    width,
+    height: Math.max(32, rect.height - verticalInset * 2),
+  };
+}
+
 function Stat({ value, label }: { value: string; label: string }) {
   return (
     <div className={styles.stat}>
@@ -61,11 +144,99 @@ export function TimelineScreen({
 }) {
   const posts = timelinePosts;
   const supportTarget = supportTargets[0];
+  const [tourStepIndex, setTourStepIndex] = useState<number | null>(null);
+  const [tourRect, setTourRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+  const tourSteps = supportTargets.length > 0
+    ? timelineTourSteps
+    : timelineTourSteps.filter((step) => step.target !== "support-card");
+  const activeTourStep = tourStepIndex === null ? null : tourSteps[tourStepIndex] ?? null;
+  const tourHole = tourRect
+    ? {
+        left: Math.max(0, tourRect.left - 12),
+        top: Math.max(0, tourRect.top - 12),
+        right: Math.min(window.innerWidth, tourRect.left + tourRect.width + 12),
+        bottom: Math.min(window.innerHeight, tourRect.top + tourRect.height + 12),
+      }
+    : null;
   const todayLabel = new Intl.DateTimeFormat("ja-JP", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
+  const getTourClass = (target: TourTarget) => (
+    activeTourStep?.target === target ? ` ${styles.tourTarget}` : ""
+  );
+  const shouldLiftPost = (postIndex: number) => (
+    postIndex === 0
+    && activeTourStep !== null
+    && ["follow-card", "like-button", "detail-button"].includes(activeTourStep.target)
+  );
+
+  useEffect(() => {
+    if (!activeTourStep || activeTab === activeTourStep.tab) {
+      return;
+    }
+
+    onSelectTab(activeTourStep.tab);
+  }, [activeTab, activeTourStep, onSelectTab]);
+
+  useEffect(() => {
+    if (!activeTourStep) {
+      setTourRect(null);
+      return;
+    }
+
+    const updateTourRect = () => {
+      const target = document.querySelector(`[data-tour="${activeTourStep.target}"]`);
+      if (!target) {
+        setTourRect(null);
+        return;
+      }
+
+      setTourRect(getTourRect(activeTourStep.target, target.getBoundingClientRect()));
+    };
+
+    const timeoutID = window.setTimeout(() => {
+      document.querySelector(`[data-tour="${activeTourStep.target}"]`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+        inline: "nearest",
+      });
+      updateTourRect();
+      window.setTimeout(updateTourRect, 420);
+    }, 80);
+
+    window.addEventListener("resize", updateTourRect);
+    window.addEventListener("scroll", updateTourRect, true);
+
+    return () => {
+      window.clearTimeout(timeoutID);
+      window.removeEventListener("resize", updateTourRect);
+      window.removeEventListener("scroll", updateTourRect, true);
+    };
+  }, [activeTab, activeTourStep]);
+
+  const startTour = () => setTourStepIndex(0);
+  const closeTour = () => setTourStepIndex(null);
+  const previousTourStep = () => {
+    setTourStepIndex((currentIndex) => {
+      if (currentIndex === null || currentIndex === 0) {
+        return currentIndex;
+      }
+
+      return currentIndex - 1;
+    });
+  };
+  const nextTourStep = () => {
+    setTourStepIndex((currentIndex) => {
+      if (currentIndex === null) {
+        return 0;
+      }
+
+      const nextIndex = currentIndex + 1;
+      return nextIndex >= tourSteps.length ? null : nextIndex;
+    });
+  };
 
   return (
     <>
@@ -85,6 +256,9 @@ export function TimelineScreen({
           おすすめ
         </button>
       </header>
+      <button className={styles.tourStartButton} onClick={startTour} type="button">
+        ガイド開始 / Start Tour
+      </button>
       <section className={styles.timeline} aria-label="投稿一覧">
         {supportTargets.length > 0 ? (
           <section className={styles.supportPanel} aria-labelledby="support-title">
@@ -94,8 +268,12 @@ export function TimelineScreen({
             </div>
             {supportTargetsError ? <p className={styles.supportError}>{supportTargetsError}</p> : null}
             <div className={styles.supportList}>
-              {supportTargets.map((target) => (
-                <article className={styles.supportItem} key={target.user.id}>
+              {supportTargets.map((target, targetIndex) => (
+                <article
+                  className={`${styles.supportItem}${targetIndex === 0 ? getTourClass("support-card") : ""}`}
+                  data-tour={targetIndex === 0 ? "support-card" : undefined}
+                  key={target.user.id}
+                >
                   <div className={styles.supportHeader}>
                     <span className={`${styles.avatar} ${styles[toneForSupportTarget(target.user.id)]}`}>
                       <UserIcon />
@@ -165,7 +343,11 @@ export function TimelineScreen({
           </section>
         ) : null}
         {activeTab === "recommended" ? (
-          <section className={styles.recommendationPanel} aria-label="おすすめユーザー">
+          <section
+            className={`${styles.recommendationPanel}${activeTourStep?.target === "recommend-card" ? ` ${styles.tourLift}` : ""}${recommendedUsers.length === 0 ? getTourClass("recommend-card") : ""}`}
+            aria-label="おすすめユーザー"
+            data-tour={recommendedUsers.length === 0 ? "recommend-card" : undefined}
+          >
             <div className={styles.recommendationHeader}>
               <h2>おすすめユーザー</h2>
               <span>今日の5人・{todayLabel}</span>
@@ -177,10 +359,14 @@ export function TimelineScreen({
             ) : null}
             {recommendedUsers.length > 0 ? (
               <div className={styles.recommendationList}>
-                {recommendedUsers.map((profile) => {
+                {recommendedUsers.map((profile, profileIndex) => {
                   const updating = Boolean(profile.userId && followingRecommendationIDs.includes(profile.userId));
                   return (
-                    <article className={styles.recommendationItem} key={profile.userId ?? profile.handle}>
+                    <article
+                      className={`${styles.recommendationItem}${profileIndex === 0 ? getTourClass("recommend-card") : ""}`}
+                      data-tour={profileIndex === 0 ? "recommend-card" : undefined}
+                      key={profile.userId ?? profile.handle}
+                    >
                       <button
                         className={`${styles.avatar} ${styles[profile.tone]}`}
                         aria-label={`${profile.name}のプロフィールを見る`}
@@ -218,8 +404,12 @@ export function TimelineScreen({
         {timelineError ? <p className={styles.emptyState}>{timelineError}</p> : null}
         {loadingTimeline ? <p className={styles.emptyState}>投稿を読み込んでいます...</p> : null}
         {!loadingTimeline && posts.length === 0 ? <p className={styles.emptyState}>表示できる投稿はまだありません。</p> : null}
-        {posts.map((post) => (
-          <article className={styles.post} key={post.id}>
+        {posts.map((post, postIndex) => (
+          <article
+            className={`${styles.post}${shouldLiftPost(postIndex) ? ` ${styles.tourLift}` : ""}${postIndex === 0 ? getTourClass("follow-card") : ""}`}
+            data-tour={postIndex === 0 ? "follow-card" : undefined}
+            key={post.id}
+          >
             <button
               className={`${styles.avatar} ${styles[post.author.tone]}`}
               aria-label={`${post.author.name}のプロフィールを見る`}
@@ -248,12 +438,18 @@ export function TimelineScreen({
               </div>
               <p className={styles.summary}>{post.summary}</p>
               <div className={styles.postActions}>
-                <button className={styles.detailButton} onClick={() => onOpenDetail(post)} type="button">
+                <button
+                  className={`${styles.detailButton}${postIndex === 0 ? getTourClass("detail-button") : ""}`}
+                  data-tour={postIndex === 0 ? "detail-button" : undefined}
+                  onClick={() => onOpenDetail(post)}
+                  type="button"
+                >
                   詳細を見る
                   <ChevronIcon />
                 </button>
                 <button
-                  className={`${styles.likeButton} ${likedPostIDs.includes(post.id) ? styles.liked : ""}`}
+                  className={`${styles.likeButton} ${likedPostIDs.includes(post.id) ? styles.liked : ""}${postIndex === 0 ? getTourClass("like-button") : ""}`}
+                  data-tour={postIndex === 0 ? "like-button" : undefined}
                   aria-pressed={likedPostIDs.includes(post.id)}
                   aria-label={`${likedPostIDs.includes(post.id) ? "いいねを取り消す" : "いいねする"} 現在${post.likes + (likedPostIDs.includes(post.id) ? 1 : 0)}件`}
                   onClick={() => onToggleLike(post.id)}
@@ -267,10 +463,76 @@ export function TimelineScreen({
           </article>
         ))}
       </section>
-      <button className={styles.createRecordButton} onClick={onCreateRecord} type="button">
+      <button
+        className={`${styles.createRecordButton}${getTourClass("create-record")}`}
+        data-tour="create-record"
+        onClick={onCreateRecord}
+        type="button"
+      >
         <PlusIcon />
         <span>記録を作成</span>
       </button>
+      {activeTourStep && tourStepIndex !== null ? (
+        <>
+          {tourHole ? (
+            <>
+              <div
+                className={styles.tourOverlaySegment}
+                style={{ left: 0, top: 0, right: 0, height: tourHole.top }}
+                aria-hidden="true"
+              />
+              <div
+                className={styles.tourOverlaySegment}
+                style={{ left: 0, top: tourHole.bottom, right: 0, bottom: 0 }}
+                aria-hidden="true"
+              />
+              <div
+                className={styles.tourOverlaySegment}
+                style={{ left: 0, top: tourHole.top, width: tourHole.left, height: tourHole.bottom - tourHole.top }}
+                aria-hidden="true"
+              />
+              <div
+                className={styles.tourOverlaySegment}
+                style={{ left: tourHole.right, top: tourHole.top, right: 0, height: tourHole.bottom - tourHole.top }}
+                aria-hidden="true"
+              />
+            </>
+          ) : (
+            <div className={styles.tourOverlay} aria-hidden="true" />
+          )}
+          {tourRect ? (
+            <div
+              className={styles.tourSpot}
+              style={{
+                left: tourRect.left,
+                top: tourRect.top,
+                width: tourRect.width,
+                height: tourRect.height,
+              }}
+              aria-hidden="true"
+            />
+          ) : null}
+          <aside className={styles.tourDialog} aria-live="polite" aria-label="サイトガイド">
+            <p className={styles.tourProgress}>
+              ステップ {tourStepIndex + 1}/{tourSteps.length} / Step {tourStepIndex + 1}/{tourSteps.length}
+            </p>
+            <h2>
+              <span>{activeTourStep.titleJa}</span>
+              <span>{activeTourStep.titleEn}</span>
+            </h2>
+            <p>{activeTourStep.bodyJa}</p>
+            <p>{activeTourStep.bodyEn}</p>
+            <div className={styles.tourActions}>
+              <button onClick={tourStepIndex === 0 ? closeTour : previousTourStep} type="button">
+                {tourStepIndex === 0 ? "終了 / Exit" : "戻る / Back"}
+              </button>
+              <button onClick={nextTourStep} type="button">
+                {tourStepIndex === tourSteps.length - 1 ? "完了 / Finish" : "次へ / Next"}
+              </button>
+            </div>
+          </aside>
+        </>
+      ) : null}
     </>
   );
 }
