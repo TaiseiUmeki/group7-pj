@@ -8,6 +8,7 @@ import { availableTags, exercisesByBodyPart } from "../constants/workout";
 import type { BodyPart, Connection, DetailedWorkoutInput, Profile, ProfileTag, SupportTarget, TimelinePost, TimelineTab, WorkoutSession } from "../types/workout";
 import { formatStopwatch, getDaysWithoutPost, getLocalDateTimeInputValue, getWorkoutElapsed } from "../utils/workout";
 import { ArrowIcon, ChevronIcon, HeartIcon, PauseIcon, PlayIcon, PlusIcon, StopIcon, UserIcon } from "./icons";
+import { WorkoutHeatmap } from "./WorkoutHeatmap";
 
 type TourTarget = "create-record" | "support-card" | "follow-card" | "like-button" | "detail-button" | "recommend-card";
 
@@ -752,6 +753,8 @@ export function ProfileScreen({
             </div>
           </section>
         ) : null}
+
+        <WorkoutHeatmap />
 
         <div className={styles.logHeader}>
           <h3>{own ? "自分のログ" : "トレーニングログ"}</h3>
